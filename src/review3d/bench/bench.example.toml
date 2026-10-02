@@ -1,0 +1,6 @@
+# Copy this file into your project as bench.toml.
+port = 8766
+host = "127.0.0.1"
+model_dirs = ["."]
+subs_dir = "submissions"
+stages_dir = "stages"

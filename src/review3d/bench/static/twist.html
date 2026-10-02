@@ -1,0 +1,652 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Twist</title>
+<!--
+  The review page. The reviewer picks a stage of the model, taps a part, and moves, turns or
+  resizes a ghost copy of it while the real part stays in place, so both are on screen at once.
+  The reviewer can also mark a spot on any part with a circle. Submit sends a package to the
+  bench: a picture before the change, a picture after it, the reviewer's words and the exact
+  transform.
+
+  Nothing here edits the model. A submission is a request, written to `submissions/`. Applying it
+  is a separate step.
+
+  The stage list comes from `stages.json`, and each stage is loaded from `stages/<name>.glb`.
+-->
+<style>
+  /* `hidden` loses to any author rule that sets display (`.markr` is flex), so it is forced here. */
+  [hidden] { display: none !important; }
+  :root { --bg:#101316; --ink:#e7eef1; --dim:#8fa0a8; --line:#222a2f; --go:#7fd7c4; --warn:#e8a33d; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font:14px/1.45 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
+  canvas#view { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  .hud { position:fixed; background:rgba(16,19,22,.93); border:1px solid var(--line);
+    border-radius:12px; padding:10px 12px; backdrop-filter:blur(6px); }
+  #bar { top:10px; left:10px; right:10px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  button, select { background:#1a2025; color:var(--ink); border:1px solid var(--line);
+    border-radius:9px; padding:8px 11px; font:inherit; cursor:pointer; }
+  button[aria-pressed="true"] { background:var(--go); color:#08201b; border-color:var(--go); font-weight:650; }
+  button:disabled { opacity:.4; cursor:default; }
+  #panel { right:10px; bottom:10px; width:min(370px, calc(100vw - 20px)); }
+  #panel h2 { margin:0 0 6px; font-size:14px; font-weight:650; }
+  #pubrow { display:flex; gap:8px; align-items:center; margin:8px 0 2px; flex-wrap:wrap; }
+  #pubmsg { font:12px/1.3 ui-monospace, monospace; color:var(--go); }
+  #sent .s.done { opacity:.45; }
+  #sent { margin-top:8px; max-height:120px; overflow:auto; border-top:1px solid var(--line);
+    padding-top:6px; }
+  #sent:empty { display:none; border:0; padding:0; margin:0; }
+  #sent .s { display:flex; gap:7px; font-size:12px; color:var(--dim); padding:2px 0; }
+  #sent .s b { color:var(--warn); font-weight:600; flex:0 0 auto; }
+  #sent .s span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #delta { font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--go);
+    white-space:pre-wrap; margin:4px 0 8px; min-height:2.6em; }
+  textarea { width:100%; min-height:62px; resize:vertical; background:#0b0e10; color:var(--ink);
+    border:1px solid var(--line); border-radius:9px; padding:8px; font:inherit; }
+  .rowb { display:flex; gap:6px; margin-top:8px; }
+  .rowb button { flex:1; }
+  #send { background:var(--go); color:#08201b; border-color:var(--go); font-weight:700; }
+  #hint { left:10px; bottom:10px; max-width:min(420px, calc(100vw - 20px)); color:var(--dim); font-size:12px; }
+  /* On a narrow screen the hint would cover the Submit button. Below 620 px the hint is hidden,
+     a short version shows inside the panel, and the panel takes the full width. */
+  @media (max-width: 620px) {
+    #hint { display:none; }
+    #panel { left:8px; right:8px; bottom:8px; width:auto; }
+    #bar { gap:5px; padding:8px; }
+    button, select { padding:7px 9px; }
+    #panel .tiny { display:block; }
+    /* keep the panel small so the model stays visible: three sent rows, message beside the button */
+    #sent { max-height:60px; }
+    #pubrow { margin:4px 0 0; }
+    #panel textarea { min-height:48px; }
+  }
+  .tiny { display:none; color:var(--dim); font-size:11px; margin-top:6px; }
+  #status { position:fixed; left:50%; top:64px; transform:translateX(-50%);
+    background:rgba(16,19,22,.95); border:1px solid var(--line); border-radius:9px;
+    padding:8px 14px; display:none; }
+  .who { color:var(--dim); font-size:12px; }
+  b.part { color:var(--warn); }
+.seg { display:inline-flex; border:1px solid #2a3138; border-radius:8px; overflow:hidden; }
+.seg button { border:0; border-radius:0; padding:6px 10px; font-size:12px; }
+.seg button + button { border-left:1px solid #2a3138; }
+.markr { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#9aa4ad; }
+.markr input { width:92px; accent-color:#e8a33d; }
+.markr span { min-width:44px; font-variant-numeric:tabular-nums; }
+</style>
+
+<canvas id="view"></canvas>
+
+<div class="hud" id="bar">
+  <select id="stage" title="which view"></select>
+  <span style="width:8px"></span>
+  <button id="m-move" data-m="translate" aria-pressed="false">Move</button>
+  <button id="m-turn" data-m="rotate" aria-pressed="true">Turn</button>
+  <button id="m-size" data-m="scale" aria-pressed="false">Size</button>
+  <button id="m-mark" data-m="mark" aria-pressed="false">Mark a spot</button>
+  <span class="seg" id="space" title="which axes the rings follow">
+    <button data-s="world" aria-pressed="true" title="World: the arrows and rings follow the room. Up is up, and the three directions never change">World</button><button data-s="local" aria-pressed="false" title="Part: the arrows and rings follow the part itself, along its own length, width and thickness, so you can twist a long part about its own length">Part</button>
+  </span>
+  <span class="seg" id="axis" title="show one ring, or all three">
+    <button data-a="all" aria-pressed="true">All</button><button data-a="x" aria-pressed="false">X</button><button data-a="y" aria-pressed="false">Y</button><button data-a="z" aria-pressed="false">Z</button>
+  </span>
+  <!-- A slider between assembled and exploded. Shown only on the stage named "parts", and only
+       when stages.json gives an offset for each part. -->
+  <label id="ex-wrap" class="markr" title="how far apart the parts are: left is put together, right is fully exploded" hidden>
+    apart <input id="ex" type="range" min="0" max="100" step="1" value="100"> <span id="ex-v">100%</span>
+  </label>
+  <label id="markr-wrap" class="markr" title="how big a circle to draw round what you mark">
+    circle <input id="markr" type="range" min="1" max="25" step="0.5" value="3"> <span id="markr-v">3 mm</span>
+  </label>
+  <span style="width:8px"></span>
+  <button id="snap" aria-pressed="true" title="round every move to 0.5 mm, every turn to 5 degrees, every size to 5%">Snap on</button>
+  <button id="reset">Put it back</button>
+</div>
+
+<div class="hud" id="panel">
+  <h2 id="who" class="who">Tap a part to pick it up</h2>
+  <div id="delta">nothing changed yet</div>
+  <textarea id="say" placeholder="What is wrong with it, in your words"></textarea>
+  <div class="rowb">
+    <button id="send" disabled>Submit</button>
+  </div>
+  <div class="tiny">You are moving a ghost. The solid part stays where it was built, so you see both.</div>
+  <!-- "Publish all" sends every submission not yet published as one batch and notifies the
+       assistant through the bench's notifier. The list below shows what was already sent. -->
+  <div id="pubrow"><button id="publish" disabled>Publish all</button><span id="pubmsg"></span></div>
+  <div id="sent"></div>
+</div>
+
+<div class="hud" id="hint">
+  You are moving a <b>ghost</b>. The solid part stays where it was built, so you can see both at once.
+  Submit sends the before picture, the after picture, your words and the exact numbers.
+  <br><b>World</b> moves and turns along the room's own directions. <b>Part</b> uses the part's own
+  length, width and thickness, so a long part twists about its own length.
+</div>
+
+<div id="status"></div>
+
+<script type="importmap">
+{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {TransformControls} from 'three/addons/controls/TransformControls.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+
+const canvas = document.getElementById('view');
+/* preserveDrawingBuffer is needed for toDataURL. Without it the browser may clear the drawing
+   buffer after compositing, and a picture taken outside the render call comes back blank. */
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x101316);
+const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 6000);
+camera.up.set(0, 0, 1);                       // the models are Z-up
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.enableDamping = true; orbit.dampingFactor = 0.08;
+orbit.zoomToCursor = true; orbit.screenSpacePanning = true;
+orbit.touches = {ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN};
+
+scene.add(new THREE.HemisphereLight(0xdfe7ea, 0x20262a, 1.5));
+const key = new THREE.DirectionalLight(0xffffff, 2.1); key.position.set(-120,-190,260); scene.add(key);
+const fill = new THREE.DirectionalLight(0xbfd2d8, 0.75); fill.position.set(170,130,70); scene.add(fill);
+const grid = new THREE.GridHelper(600, 40, 0x2a3136, 0x1c2226);
+grid.rotation.x = Math.PI/2; scene.add(grid);
+
+const root = new THREE.Group(); scene.add(root);
+const marks = new THREE.Group(); scene.add(marks);
+
+const gizmo = new TransformControls(camera, renderer.domElement);
+gizmo.addEventListener('dragging-changed', e => { orbit.enabled = !e.value; });
+/* Snap rounds the distance moved, not the absolute position. three.js translation snap rounds the
+   ghost's absolute position to the grid, and a part's home is wherever the build put it, so the
+   distance shown would not be a round number. The distance is what the reviewer states, so that is
+   what is rounded, in whichever axes the gizmo uses. Turn and Size keep three.js's own snapping:
+   a turn is an increment from the start of the drag and a size starts at 1, so both are round. */
+function snapDelta() {
+  if (!ghost || !ghostHome) return;
+  const g = 0.5, r = v => Math.round(v / g) * g;
+  const d = ghost.position.clone().sub(ghostHome);
+  if (gizmo.space === 'local') {
+    const q = ghost.quaternion.clone();
+    d.applyQuaternion(q.clone().invert());
+    d.set(r(d.x), r(d.y), r(d.z));
+    d.applyQuaternion(q);
+  } else {
+    d.set(r(d.x), r(d.y), r(d.z));
+  }
+  ghost.position.copy(ghostHome).add(d);
+}
+gizmo.addEventListener('objectChange', () => { if (snap && mode === 'translate') snapDelta(); showDelta(); });
+/* The rings are drawn by the helper object, not by the control. In three r169 `TransformControls`
+   extends `Controls`, which is not an Object3D, and `getHelper()` returns the object that draws.
+   That object is the one hidden before a picture is taken. Older builds draw with the control
+   itself, so both are supported. */
+const gizmoArt = gizmo.getHelper ? gizmo.getHelper() : gizmo;
+scene.add(gizmoArt);
+
+/* The starting viewpoint. A stage in stages.json may carry `faces`, a unit vector for the direction
+   the model faces, so the camera opens in front of it. Without it a fixed direction is used. */
+let META = null;
+async function meta() {
+  if (META) return META;
+  try { META = await (await fetch('stages.json', {cache:'no-store'})).json(); }
+  catch (e) { META = {}; }
+  return META;
+}
+function eyeFor(m, which) {
+  const f = m && m.faces;
+  const v = (f && f.length === 3) ? new THREE.Vector3(f[0], f[1], f[2]) : null;
+  if (!v || v.lengthSq() < 1e-6) return new THREE.Vector3(-0.52, -0.72, 0.45).normalize();
+  /* low for the "assembled" stage, higher for the others, because shallow surface detail
+     disappears when seen from straight above */
+  v.normalize();
+  v.z = (which === 'assembled') ? 0.16 : 0.45;
+  return v.normalize();
+}
+
+const loader = new GLTFLoader();
+const picks = [];                 // the solid parts, what the raycaster hits
+let ghost = null, ghostOf = null, ghostHome = null, stage = 'assembled', fitBox = null;
+let mode = 'rotate', snap = true, radius = 200, pendingMark = null;
+
+function say(msg, ms) {
+  const el = document.getElementById('status');
+  el.textContent = msg; el.style.display = 'block';
+  if (ms) setTimeout(() => { el.style.display = 'none'; }, ms);
+}
+
+function applyExplode() {
+  const wrap = document.getElementById('ex-wrap');
+  const offs = (META && META.meta && META.meta.offsets) || {};
+  const on = stage === 'parts' && Object.keys(offs).length > 0;
+  wrap.hidden = !on;
+  const ex = on ? +document.getElementById('ex').value / 100 : 1;
+  document.getElementById('ex-v').textContent = Math.round(ex * 100) + '%';
+  for (const m of root.children) {
+    const off = offs[m.userData.partName];
+    if (on && off) { const k = -(1 - ex); m.position.set(off[0] * k, off[1] * k, off[2] * k); }
+    else m.position.set(0, 0, 0);
+  }
+  /* a ghost picked before the slider moved would stay where its part used to be */
+  if (ghost && ghostOf) { const src = ghostOf; dropGhost(); makeGhost(src); }
+}
+
+async function loadStage(which) {
+  say('loading ' + which + '…');
+  dropGhost(); marks.clear();
+  while (root.children.length) root.remove(root.children[0]);
+  picks.length = 0;
+  const M = await meta();
+  const g = await loader.loadAsync('stages/' + which + '.glb');
+  g.scene.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  g.scene.traverse(o => {
+    if (!o.isMesh) return;
+    const m = o.clone();
+    m.geometry = o.geometry.clone();
+    m.geometry.applyMatrix4(o.matrixWorld);          // bake, so every part shares world space
+    m.position.set(0,0,0); m.quaternion.identity(); m.scale.set(1,1,1);
+    m.geometry.computeBoundingBox();
+    m.userData.partName = o.name || 'piece';
+    m.material = new THREE.MeshStandardMaterial({vertexColors:true, roughness:.62, metalness:.02});
+    root.add(m);
+    /* Meshes named `no` followed by digits are number labels, and a mesh named `base` is a stand.
+       Both are drawn but cannot be picked. */
+    if (!/^no\d+$/.test(m.userData.partName) && m.userData.partName !== 'base') picks.push(m);
+    box.union(m.geometry.boundingBox);
+  });
+  const c = box.getCenter(new THREE.Vector3());
+  radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 10);
+  fitBox = box.clone();
+  orbit.target.copy(c);
+  camera.position.copy(c).add(eyeFor(M[which], which));
+  camera.near = radius/100; camera.far = radius*60;
+  fit();
+  orbit.update();
+  stage = which;
+  applyExplode();
+  say(picks.length + ' parts, tap one', 1800);
+}
+
+/* The ghost is a group placed at the part's own centre. The baked geometry is in world
+   coordinates, so turning the mesh itself would swing the part about the world origin. With the
+   group at the part's centre and the mesh offset by minus that centre, Turn turns the part where
+   it stands. */
+let ghostHomeQ = new THREE.Quaternion();
+function partFrame(name) {
+  const f = META && META[stage] && META[stage].frames && META[stage].frames[name];
+  if (!f || !f.axes || f.axes.length !== 3) return null;
+  const a = f.axes.map(v => new THREE.Vector3(v[0], v[1], v[2]).normalize());
+  const M = new THREE.Matrix4().makeBasis(a[0], a[1], a[2]);
+  return {q: new THREE.Quaternion().setFromRotationMatrix(M), axes: a, spread: f.spread || null};
+}
+function makeGhost(src) {
+  dropGhost();
+  /* The part may be drawn away from its baked place (the apart slider moves it by `position`), so
+     the ghost's home is the baked centre plus that offset. */
+  const centre = src.geometry.boundingBox.getCenter(new THREE.Vector3()).add(src.position);
+  const grp = new THREE.Group();
+  grp.position.copy(centre);
+  /* The ghost's frame is the part's own axes. The loader bakes every part to identity, so "local"
+     space would be world space. stages.json carries each part's principal axes (longest first);
+     the group takes that orientation and the mesh inside takes the inverse, so nothing moves on
+     screen and Part space turns the rings onto the part. */
+  const pf = partFrame(src.userData.partName);
+  /* Normalised, because the frame is stored to a few decimals and three.js inverts a quaternion
+     by conjugating it, which is only the inverse at length one. Without this a freshly picked
+     ghost reads as turned by a fraction of a degree. */
+  ghostHomeQ = pf ? pf.q.clone().normalize() : new THREE.Quaternion();
+  grp.quaternion.copy(ghostHomeQ);
+  const m = new THREE.Mesh(src.geometry, new THREE.MeshStandardMaterial({
+    color: 0x7fd7c4, transparent: true, opacity: 0.55, roughness: .5, metalness: .0,
+    depthWrite: false,
+  }));
+  m.quaternion.copy(ghostHomeQ.clone().invert());
+  m.position.copy(centre).multiplyScalar(-1).applyQuaternion(ghostHomeQ.clone().invert());
+  grp.add(m);
+  const edge = new THREE.LineSegments(
+    new THREE.EdgesGeometry(src.geometry, 28),
+    new THREE.LineBasicMaterial({color: 0x7fd7c4, transparent:true, opacity:.9}));
+  /* The outline takes the mesh's rotation as well as its position, or it is drawn turned about
+     the part's centre and no longer lines up with the ghost. */
+  edge.position.copy(m.position);
+  edge.quaternion.copy(m.quaternion);
+  grp.add(edge);
+  scene.add(grp);
+  ghost = grp; ghostOf = src; ghostHome = centre.clone();
+  gizmo.attach(grp);
+  gizmoArt.visible = (mode !== 'mark');
+  setMode(mode);
+  document.getElementById('who').innerHTML =
+    'Moving the ghost of <b class="part">' + src.userData.partName + '</b>';
+  showDelta();
+}
+
+function dropGhost() {
+  gizmo.detach();
+  gizmoArt.visible = false;
+  if (ghost) scene.remove(ghost);
+  ghost = null; ghostOf = null; ghostHome = null;
+  document.getElementById('who').textContent = 'Tap a part to pick it up';
+  showDelta();
+}
+
+/* The change as numbers: how far the ghost moved, how far it turned, and how much bigger it is.
+   Shown live so the reviewer can read it before sending. */
+function change() {
+  if (!ghost) return null;
+  const move = ghost.position.clone().sub(ghostHome);
+  const ax = new THREE.Vector3(), q = ghost.quaternion.clone().multiply(ghostHomeQ.clone().invert());
+  let ang = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
+  const sq = Math.sqrt(Math.max(0, 1 - q.w*q.w));
+  /* Rounding is not a turn. The part's frame goes through stages.json and back, which leaves the
+     ghost about 0.1 degrees off its own home. The smallest real turn with Snap on is 5 degrees,
+     so anything below 0.05 degrees is treated as no turn. */
+  if (sq < 1e-6 || ang < THREE.MathUtils.degToRad(0.05)) { ax.set(0,0,1); ang = 0; }
+  else { ax.set(q.x/sq, q.y/sq, q.z/sq); if (q.w < 0) ax.negate(); }
+  return {
+    move_mm: [move.x, move.y, move.z].map(v => +v.toFixed(3)),
+    move_len_mm: +move.length().toFixed(3),
+    turn_deg: +THREE.MathUtils.radToDeg(ang).toFixed(2),
+    turn_axis: [ax.x, ax.y, ax.z].map(v => +v.toFixed(4)),
+    turn_axis_named: axisName(ax),
+    space: gizmo.space,
+    scale: +ghost.scale.x.toFixed(4),
+    /* Where the part was and where the ghost is, not only how far it went. The build may change
+       after the submission, and the two centres let the move be read as a place rather than as an
+       offset against an older build. */
+    centre_before: ghostOf ? boxCentre(ghostOf) : null,
+    centre_after: boxCentre(ghost),
+  };
+}
+
+function boxCentre(o) {
+  const c = new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3());
+  return [c.x, c.y, c.z].map(v => +v.toFixed(3));
+}
+
+function axisName(ax) {
+  const pf = ghostOf && partFrame(ghostOf.userData.partName);
+  const names = ['its long axis', 'its middle axis', 'its short axis'];
+  if (pf) for (let i = 0; i < 3; i++) {
+    const d = pf.axes[i].dot(ax);
+    if (Math.abs(d) > 0.97) return (d < 0 ? '-' : '') + names[i];
+  }
+  const w = [['x', 1,0,0], ['y', 0,1,0], ['z', 0,0,1]];
+  for (const [n, x, y, z] of w) {
+    const d = ax.x*x + ax.y*y + ax.z*z;
+    if (Math.abs(d) > 0.97) return (d < 0 ? '-' : '') + 'world ' + n;
+  }
+  return 'a free axis';
+}
+function showDelta() {
+  /* One exit, so the Submit button is enabled from both halves (a change and a mark) whatever
+     happened above. */
+  const c = change();
+  const el = document.getElementById('delta');
+  const bits = [];
+  if (c) {
+    if (c.move_len_mm > 0.0005) bits.push('moved ' + c.move_len_mm.toFixed(2) + ' mm  [' +
+      c.move_mm.map(v => v.toFixed(2)).join(', ') + ']');
+    if (c.turn_deg > 0.005) bits.push('turned ' + c.turn_deg.toFixed(1) + '°  about ' +
+      c.turn_axis_named + '  [' + c.turn_axis.map(v => v.toFixed(2)).join(', ') + ']');
+    if (Math.abs(c.scale - 1) > 0.0005) bits.push('size ×' + c.scale.toFixed(3));
+  }
+  if (pendingMark) bits.push('a spot marked on ' + pendingMark.part +
+    '  at [' + pendingMark.at.join(', ') + ']');
+  el.textContent = bits.length ? bits.join('\n') : 'nothing changed yet';
+  document.getElementById('send').disabled = bits.length === 0;
+}
+
+function setMode(m) {
+  mode = m;
+  for (const b of document.querySelectorAll('#bar button[data-m]'))
+    b.setAttribute('aria-pressed', String(b.dataset.m === m));
+  if (m === 'mark') { gizmo.enabled = false; gizmoArt.visible = false; return; }
+  gizmo.enabled = true; gizmoArt.visible = !!ghost;
+  gizmo.setMode(m);
+  applySnap();
+}
+function applySnap() {
+  gizmo.setRotationSnap(snap ? THREE.MathUtils.degToRad(5) : null);
+  gizmo.setTranslationSnap(null);                    // the move is rounded in snapDelta, not on the grid
+  gizmo.setScaleSnap(snap ? 0.05 : null);
+  const b = document.getElementById('snap');
+  b.setAttribute('aria-pressed', String(snap));
+  b.textContent = snap ? 'Snap on' : 'Snap off';
+}
+
+/* A mark is a point on the part, not a circle on a picture. Anchored in 3D it stays in place when
+   the model is turned, and it records which part and where on it. */
+let lastHit = null;
+function placeMark(hit) {
+  marks.clear();
+  lastHit = hit;
+  /* The circle radius comes from the slider, in mm, and travels in the submission as r_mm. The
+     dot stays small so the circle reads as a circle round something. */
+  const r = Math.max(parseFloat(document.getElementById('markr').value) || 3, 0.5);
+  /* Stand the mark off the surface along the face normal, or half the ring is inside the part.
+     The normal comes back in the hit object's own space, so it is carried into world space. */
+  const n = hit.face
+    ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize()
+    : new THREE.Vector3(0, 0, 1);
+  const dot = Math.max(r * 0.12, 0.5);
+  const at = hit.point.clone().addScaledVector(n, dot * 0.7);
+  const s = new THREE.Mesh(new THREE.SphereGeometry(dot, 20, 14),
+    new THREE.MeshBasicMaterial({color: 0xe8a33d, transparent:true, opacity:.9}));
+  s.position.copy(at);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(r * 0.86, r, 64),
+    new THREE.MeshBasicMaterial({color:0xe8a33d, side:THREE.DoubleSide, transparent:true, opacity:.75}));
+  ring.position.copy(at);
+  ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+  marks.add(s); marks.add(ring);
+  pendingMark = {
+    part: hit.object.userData.partName,
+    at: [+hit.point.x.toFixed(3), +hit.point.y.toFixed(3), +hit.point.z.toFixed(3)],
+    r_mm: +r.toFixed(3),
+  };
+  document.getElementById('who').innerHTML =
+    'Marked a spot on <b class="part">' + pendingMark.part + '</b>';
+  showDelta();
+}
+
+document.getElementById('markr').addEventListener('input', () => {
+  document.getElementById('markr-v').textContent = document.getElementById('markr').value + ' mm';
+  if (lastHit && pendingMark) placeMark(lastHit);
+});
+
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!downAt) return;
+  const moved = Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]);
+  downAt = null;
+  if (moved > 5) return;                      // that was an orbit, not a tap
+  if (gizmo.dragging) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  ptr.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+  ray.setFromCamera(ptr, camera);
+  const hit = ray.intersectObjects(picks, false)[0];
+  if (!hit) { if (mode !== 'mark') dropGhost(); return; }
+  if (mode === 'mark') placeMark(hit);
+  else makeGhost(hit.object);
+});
+
+function shot() { renderer.render(scene, camera); return canvas.toDataURL('image/png'); }
+
+async function listSent() {
+  try {
+    const j = await (await fetch('/api/submissions', {cache:'no-store'})).json();
+    const el = document.getElementById('sent');
+    el.innerHTML = '';
+    /* Counted by the `published` stamp, not by the state. An answered thread has state
+       `answered`, so counting by state would offer to publish it again. */
+    const fresh = (j.submissions || []).filter(s => !s.published).length;
+    const pb = document.getElementById('publish');
+    pb.disabled = fresh === 0;
+    pb.textContent = fresh ? 'Publish all (' + fresh + ' new)' : 'Publish all';
+    for (const s of (j.submissions || []).slice(0, 8)) {
+      const row = document.createElement('div');
+      row.className = 's' + (s.published ? ' done' : '');
+      const t = (s.at || '').slice(11, 16);
+      row.innerHTML = '<b>' + t + ' ' + (s.part || '?') + '</b><span></span>';
+      row.lastChild.textContent = s.said || ('(' + (s.kind || 'change') + ', no words)');
+      el.appendChild(row);
+    }
+  } catch (e) { /* the list is a convenience and must not break the page */ }
+}
+
+async function submit() {
+  const said = document.getElementById('say').value.trim();
+  const c = change();
+  if (!c && !pendingMark) return;
+  document.getElementById('send').disabled = true;
+  say('sending…');
+  /* Two pictures from the same camera. BEFORE hides the ghost and shows the part where it was
+     built. AFTER hides the original and shows the ghost in its place. Flipping between them shows
+     only what changed. The live view keeps showing both at once. */
+  const gv = gizmoArt.visible;
+  gizmoArt.visible = false;
+  if (ghost) ghost.visible = false;
+  const before = shot();
+  if (ghost) { ghost.visible = true; if (ghostOf) ghostOf.visible = false; }
+  const after = shot();
+  if (ghostOf) ghostOf.visible = true;
+  gizmoArt.visible = gv;
+
+  const body = {
+    kind: pendingMark && !c ? 'mark' : 'move',
+    stage, part: (ghostOf && ghostOf.userData.partName) || (pendingMark && pendingMark.part) || null,
+    said, change: c, mark: pendingMark,
+    /* Everything needed to rebuild the view: the stage, the camera, the circle, how far apart the
+       parts were, the lens, the frame size and the gizmo's space. */
+    view: {apart: stage === 'parts' ? +document.getElementById('ex').value / 100 : null,
+           fov: camera.fov, width: renderer.domElement.width, height: renderer.domElement.height,
+           space: gizmo.space, snap: snap, mode: mode},
+    camera: {eye: camera.position.toArray().map(v => +v.toFixed(2)),
+             at: orbit.target.toArray().map(v => +v.toFixed(2))},
+    before_png: before, after_png: after,
+  };
+  try {
+    const r = await fetch('/api/submit', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)});
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    say('sent: ' + j.id, 3500);
+    document.getElementById('say').value = '';
+    pendingMark = null; marks.clear();
+    dropGhost();
+    listSent();
+  } catch (err) {
+    say('could not send: ' + err.message, 6000);
+    document.getElementById('send').disabled = false;
+  }
+}
+
+for (const b of document.querySelectorAll('#bar button[data-m]'))
+  b.onclick = () => setMode(b.dataset.m);
+document.getElementById('snap').onclick = () => {
+  snap = !snap; applySnap();
+  if (ghost && snap && mode === 'translate') { snapDelta(); showDelta(); }   // pressing it rounds the current move
+};
+async function publishAll() {
+  const b = document.getElementById('publish'), m = document.getElementById('pubmsg');
+  b.disabled = true; m.textContent = 'publishing…';
+  try {
+    const r = await fetch('/api/publish', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    m.textContent = !j.count ? 'nothing new to publish'
+      : j.pinged ? 'published ' + j.count + ', the assistant has been notified'
+      : 'published ' + j.count + ', but the ping failed: ' + (j.detail || 'no detail');
+  } catch (e) { m.textContent = 'could not publish: ' + e.message; }
+  listSent();
+}
+document.getElementById('publish').onclick = publishAll;
+document.getElementById('ex').addEventListener('input', applyExplode);
+document.getElementById('reset').onclick = () => {
+  /* Home is the part's own frame, not identity, because a ghost starts at ghostHomeQ. */
+  if (ghost) { ghost.position.copy(ghostHome); ghost.quaternion.copy(ghostHomeQ || new THREE.Quaternion()); ghost.scale.set(1,1,1); showDelta(); }
+  pendingMark = null; marks.clear(); showDelta();
+};
+document.getElementById('send').onclick = submit;
+document.getElementById('stage').onchange = e => loadStage(e.target.value);
+
+/* Fit the width as well as the height. A distance chosen from the radius fits the vertical field
+   only, so on a narrow upright screen the model would run off both sides. */
+function fit() {
+  /* Fit the box's real extent in the camera's own frame, not its bounding sphere, which leaves a
+     tall thin model small in the middle of the screen. All eight corners are projected onto the
+     camera's right and up axes, and the distance is solved from whichever field is tighter. */
+  if (!fitBox) return;
+  const dir = camera.position.clone().sub(orbit.target).normalize();
+  const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize();
+  const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+  const c = orbit.target;
+  let hw = 0, hh = 0, hd = 0;
+  const lo = fitBox.min, hi = fitBox.max;
+  for (let i = 0; i < 8; i++) {
+    const v = new THREE.Vector3(i & 1 ? hi.x : lo.x, i & 2 ? hi.y : lo.y, i & 4 ? hi.z : lo.z).sub(c);
+    hw = Math.max(hw, Math.abs(v.dot(right)));
+    hh = Math.max(hh, Math.abs(v.dot(up)));
+    hd = Math.max(hd, Math.abs(v.dot(dir)));
+  }
+  const vfov = THREE.MathUtils.degToRad(camera.fov);
+  const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
+  const room = innerWidth < 620 ? 1.30 : 1.10;      // the panel covers the bottom on a narrow screen
+  const need = Math.max(hh / Math.tan(vfov / 2), hw / Math.tan(hfov / 2)) * room + hd;
+  camera.position.copy(c).addScaledVector(dir, need);
+  camera.updateProjectionMatrix();
+}
+
+let touched = false;
+orbit.addEventListener('start', () => { touched = true; });
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+  if (!touched) fit();              // once the reviewer has moved the view, it is left alone
+}
+addEventListener('resize', resize);
+resize();
+(function tick() { requestAnimationFrame(tick); orbit.update(); renderer.render(scene, camera); })();
+
+/* World keeps the rings on x, y and z. Part turns them onto the part's own axes (longest first).
+   The axis buttons leave one ring on the screen, which is easier to use on a touch screen. The
+   outer ring of the rotate gizmo, turning about the line of sight, is always there. */
+for (const b of document.querySelectorAll('#space button')) b.onclick = () => {
+  for (const o of document.querySelectorAll('#space button')) o.setAttribute('aria-pressed', o === b);
+  gizmo.setSpace(b.dataset.s);
+};
+for (const b of document.querySelectorAll('#axis button')) b.onclick = () => {
+  for (const o of document.querySelectorAll('#axis button')) o.setAttribute('aria-pressed', o === b);
+  const a = b.dataset.a;
+  gizmo.showX = a === 'all' || a === 'x';
+  gizmo.showY = a === 'all' || a === 'y';
+  gizmo.showZ = a === 'all' || a === 'z';
+};
+setMode('rotate');
+listSent();
+populateStages().catch(e => say('could not load: ' + e.message));
+
+/* The stage list comes from stages.json: every key except "meta", in file order. The first one is
+   opened. */
+async function populateStages() {
+  const M = await meta();
+  const names = Object.keys(M).filter(k => k !== 'meta');
+  if (!names.length) throw new Error('stages.json lists no stages');
+  const sel = document.getElementById('stage');
+  sel.innerHTML = '';
+  for (const n of names) {
+    const o = document.createElement('option');
+    o.value = n; o.textContent = n;
+    sel.appendChild(o);
+  }
+  sel.value = names[0];
+  await loadStage(names[0]);
+}
+</script>

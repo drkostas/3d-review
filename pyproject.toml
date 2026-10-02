@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "3d-review"
+version = "0.1.0"
+description = "Review a 3D design with an assistant: a web bench where a person marks what is wrong on the model, a ledger of which build step moved what, a requirement board whose rows are proven able to fail, and a Penpot bridge"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Konstantinos Georgiou" }]
+dependencies = ["3d-base>=0.2.0", "numpy>=1.24", "trimesh>=4.0", "scipy>=1.10", "tomli>=2; python_version < '3.11'"]
+keywords = ["3d", "design review", "3d-printing", "trimesh", "penpot", "assistant"]
+classifiers = ["Programming Language :: Python :: 3", "Topic :: Multimedia :: Graphics :: 3D Modeling"]
+
+[project.urls]
+Homepage = "https://github.com/drkostas/3d-review"
+
+[project.scripts]
+3d-review = "review3d.cli:main"
+
+[project.optional-dependencies]
+penpot = ["shapely>=2.0"]
+test = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+review3d = ["skill/SKILL.md", "bench/static/*.html", "bench/static/vendor/**/*", "bench/bench.example.toml"]
