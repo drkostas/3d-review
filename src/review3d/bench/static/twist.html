@@ -633,20 +633,26 @@ setMode('rotate');
 listSent();
 populateStages().catch(e => say('could not load: ' + e.message));
 
-/* The stage list comes from stages.json: every key except "meta", in file order. The first one is
-   opened. */
+/* The stage list comes from stages.json. Its "meta" entry may carry `stage_order` (the names in the
+   order to list them), `stage_labels` ({name: text to show}) and `default_stage` (the one to open).
+   Without them every key except "meta" is listed by name, in file order, and the first is opened. */
 async function populateStages() {
   const M = await meta();
-  const names = Object.keys(M).filter(k => k !== 'meta');
-  if (!names.length) throw new Error('stages.json lists no stages');
+  const info = M.meta || {};
+  const all = Object.keys(M).filter(k => k !== 'meta');
+  if (!all.length) throw new Error('stages.json lists no stages');
+  const listed = (info.stage_order || []).filter(n => all.includes(n));
+  const names = listed.concat(all.filter(n => !listed.includes(n)));
+  const labels = info.stage_labels || {};
   const sel = document.getElementById('stage');
   sel.innerHTML = '';
   for (const n of names) {
     const o = document.createElement('option');
-    o.value = n; o.textContent = n;
+    o.value = n; o.textContent = labels[n] || n;
     sel.appendChild(o);
   }
-  sel.value = names[0];
-  await loadStage(names[0]);
+  const first = names.includes(info.default_stage) ? info.default_stage : names[0];
+  sel.value = first;
+  await loadStage(first);
 }
 </script>
