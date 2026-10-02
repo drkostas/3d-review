@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- stages.json can name the order of the stages, a label for each, and the stage the bench opens on (`write_stages(labels=, order=, default=)`)
+
 ## 0.1.0
 
 First release.

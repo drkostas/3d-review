@@ -153,3 +153,19 @@ def test_thread_authors_are_checked(bench):
         thread.append(sid, "someone", "text")
     with pytest.raises(ValueError):
         thread.append(sid, thread.ASSISTANT, "text", state="published")
+
+
+def test_stage_labels_order_and_default_are_written(tmp_path):
+    import json
+    import trimesh
+    from review3d.stages import write_stages
+    box = trimesh.creation.box()
+    info = write_stages({"printed": {"a": box}, "assembled": {"a": box.copy()}}, tmp_path,
+                        labels={"assembled": "2 · Assembled", "printed": "1 · As printed"},
+                        order=["assembled", "printed"], default="assembled")
+    meta = json.loads((tmp_path / "stages.json").read_text())["meta"]
+    assert meta["stage_order"] == ["assembled", "printed"] and meta["default_stage"] == "assembled"
+    assert meta["stage_labels"]["assembled"] == "2 · Assembled"
+    import pytest
+    with pytest.raises(ValueError):
+        write_stages({"printed": {"a": box}}, tmp_path, default="nope")

@@ -66,7 +66,8 @@ def _frame(mesh):
     }
 
 
-def write_stages(stages, out_dir, faces=None, offsets=None, colours=None, meta=None):
+def write_stages(stages, out_dir, faces=None, offsets=None, colours=None, meta=None,
+                 labels=None, order=None, default=None):
     """Write `stages` ({stage: {part: Trimesh}}) for the bench and return the stages.json dict.
 
     `faces` is the direction the model faces (three numbers) or None. `offsets` is
@@ -74,6 +75,9 @@ def write_stages(stages, out_dir, faces=None, offsets=None, colours=None, meta=N
     part not named there is drawn in `PART_COLOUR`. `meta` is a dict of extra keys for the `meta`
     entry.
     """
+    for name in list(order or []) + ([default] if default else []) + list(labels or {}):
+        if name not in stages:
+            raise ValueError(f"{name!r} is named in labels, order or default but is not a stage")
     out_dir = pathlib.Path(out_dir)
     folder = out_dir / "stages"
     folder.mkdir(parents=True, exist_ok=True)
@@ -112,6 +116,9 @@ def write_stages(stages, out_dir, faces=None, offsets=None, colours=None, meta=N
     if offsets:
         info["meta"]["offsets"] = {n: [round(float(v), 3) for v in off]
                                    for n, off in offsets.items()}
+    for key, value in (("stage_labels", labels), ("stage_order", order), ("default_stage", default)):
+        if value:
+            info["meta"][key] = dict(value) if key == "stage_labels" else (list(value) if key == "stage_order" else value)
     if meta:
         info["meta"].update(meta)
     (out_dir / "stages.json").write_text(json.dumps(info, indent=2))
