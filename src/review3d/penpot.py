@@ -171,7 +171,10 @@ class PenpotSettings:
         path = Path(path)
         text = path.read_text()
         if path.suffix.lower() == ".toml":
-            import tomllib
+            try:
+                import tomllib
+            except ModuleNotFoundError:  # Python 3.10
+                import tomli as tomllib
             data = tomllib.loads(text)
         else:
             data = json.loads(text)
