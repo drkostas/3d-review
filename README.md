@@ -1,8 +1,8 @@
+![3d-review](docs/images/banner.png)
+
 # 3d-review
 
 3d-review is what I used to review a 3D design together with an AI assistant, while designing a 3D-printed toy. The person shows what is wrong on the model itself, the assistant answers with pictures, and the assistant has to prove that what the person asked for is still true after every rebuild.
-
-![The review bench with three parts loaded](docs/bench.png)
 
 It has four parts, and each one can be used alone.
 
