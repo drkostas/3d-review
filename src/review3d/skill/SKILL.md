@@ -102,10 +102,22 @@ old = trimesh.load("model/stages/assembled.glb", force="scene").geometry["lid"].
 # ... change the model, rebuild the stages ...
 thread.say(sid, "Turned the lid 15 degrees about its hinge as you showed. Orange is where it was.",
            state="fixed", shadow={"lid": old}, highlight="lid", did={"turn_deg": 15.0})
+# Without an old mesh, the orange is taken from the person's own before picture instead:
+thread.say(sid2, "Trimmed the tab. Orange is what was taken off.", state="fixed")
 ```
 
-- `say` renders the stage file on disk from the camera stored with the submission, so the reply
-  lines up with the person's own picture. Rebuild the stages first, or the reply shows the old model.
+- `say` renders the stage file on disk the way the page drew the person's picture: the camera, the
+  lens (`view.fov`) and the frame (`view.width` by `view.height`, scaled down to 1600 px wide) stored
+  with the submission, each node's transform, and the "apart" slider on the parts stage. So the
+  reply lines up with the person's own picture. Rebuild the stages first, or the
+  reply shows the old model.
+- Without `shadow`, the reply compares the person's before picture with the new render and paints
+  in orange what was model then and is empty space now (`picture_shadow`). Turn it off with
+  `shadow_picture=False`. Pass `shadow` (the old meshes) when the change is a move, because a
+  picture cannot show what was hidden behind another part.
+- Keep the stages in one fixed frame across rebuilds. A build that re-centres the scene on its
+  bounding box moves everything a little whenever any part changes size, and then every stored
+  camera points somewhere else and the orange marks that shift instead of the change.
 - Open every reply PNG before sending it. A reply picture that does not show the change answers
   nothing.
 - States are `new` (waiting on you), `answered` (waiting on the person), `fixed` (done, with a

@@ -6,7 +6,7 @@
 
 It has four parts, and each one can be used alone.
 
-- **The bench** is a web page that shows the model's stages. The person picks a part, moves or turns a ghost of it, marks a spot, writes what is wrong and submits. Each submission keeps the before and after pictures, the exact transform and the words, and becomes a thread the assistant answers. Replies are drawn from the person's own camera. "Publish all" notifies the assistant once for everything new.
+- **The bench** is a web page that shows the model's stages. The person picks a part, moves or turns a ghost of it, marks a spot, writes what is wrong and submits. Each submission keeps the before and after pictures, the exact transform and the words, and becomes a thread the assistant answers. Replies are drawn from the person's own camera, lens and frame, so they line up with the person's picture, and what is no longer there shows as an orange shadow. "Publish all" notifies the assistant once for everything new.
 - **The ledger** records which step of a build pipeline moved or rebuilt a part the person cares about, including code that runs between two steps. A placement the person locked stays locked, or the ledger says which line moved it.
 - **The board** has one row per thing the person asked for, each with a measurement and a bar. A planted fault proves each row can go red, so a green board is not a green check over a hole.
 - **The Penpot bridge** pushes 2D outlines in millimetres into a self-hosted Penpot file and reads the person's edits back.
