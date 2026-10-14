@@ -117,7 +117,10 @@ thread.say(sid2, "Trimmed the tab. Orange is what was taken off.", state="fixed"
   picture cannot show what was hidden behind another part.
 - Keep the stages in one fixed frame across rebuilds. A build that re-centres the scene on its
   bounding box moves everything a little whenever any part changes size, and then every stored
-  camera points somewhere else and the orange marks that shift instead of the change.
+  camera points somewhere else and the orange marks that shift instead of the change. For
+  submissions made before the frame was fixed, measure the shift once (render with a few trial
+  shifts and keep the one whose outline matches the before picture best on parts that did not
+  change) and pass it as `shift=(x, y, z)` to `say` or `render_reply`.
 - Open every reply PNG before sending it. A reply picture that does not show the change answers
   nothing.
 - States are `new` (waiting on you), `answered` (waiting on the person), `fixed` (done, with a

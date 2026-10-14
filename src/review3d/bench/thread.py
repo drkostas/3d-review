@@ -102,7 +102,7 @@ def every(newest_first=True):
     for f in sorted(SUBS.glob("*.json"), reverse=newest_first):
         try:
             d = json.loads(f.read_text())
-        except Exception:
+        except (OSError, ValueError):        # unreadable, or not JSON (a file still being written)
             continue
         out.append(_normalise(d))
     return out
@@ -377,7 +377,8 @@ def _mean_colour(m, default):
 
 
 def render_reply(sub_id, name=None, shadow=None, highlight=None, size=None, stage=None,
-                 mark=True, fov=None, labels=True, shadow_picture=True, max_width=MAX_WIDTH):
+                 mark=True, fov=None, labels=True, shadow_picture=True, max_width=MAX_WIDTH,
+                 shift=None):
     """Render the current state of the stage from the reviewer's camera and save it as a PNG.
 
     The reply is drawn the way the bench page drew the reviewer's picture: the camera stored with
@@ -395,6 +396,12 @@ def render_reply(sub_id, name=None, shadow=None, highlight=None, size=None, stag
     `highlight` names one part to tint. `mark` draws the reviewer's circle when the submission has
     one. `labels` draws the number labels the page draws. Returns the file name, which is stored
     in `SUBS`.
+
+    `shift` is for a stage file whose coordinates moved since the submission was made, for example
+    a build that re-centres the model each time. It is the translation (x, y, z) in the stage's
+    units from where a point was in the reviewer's frame to where the same point is in the stage
+    file now. The stored camera and the circle are moved by it, so parts that did not change line
+    up with the reviewer's picture again. A stage frame that stays fixed across rebuilds needs none.
     """
     from base3d import show
 
@@ -404,6 +411,8 @@ def render_reply(sub_id, name=None, shadow=None, highlight=None, size=None, stag
     cam = d.get("camera") or {}
     eye = np.asarray(cam.get("eye") or (200, 200, 120), float)
     at = np.asarray(cam.get("at") or (0, 0, 60), float)
+    move = np.zeros(3) if shift is None else np.asarray(shift, float).reshape(3)
+    eye, at = eye + move, at + move
     lens, frame = reply_frame(d, max_width)
     fov = float(fov or lens)
     width, height = size or frame
@@ -433,10 +442,11 @@ def render_reply(sub_id, name=None, shadow=None, highlight=None, size=None, stag
         # The page stands the circle and its dot off the surface by 0.7 of the dot's radius, so
         # the same is done here, toward the camera.
         r = float(mk.get("r_mm") or 3.0)
-        to_eye = eye - np.asarray(mk["at"], float)
+        mark_at = np.asarray(mk["at"], float) + move
+        to_eye = eye - mark_at
         to_eye = to_eye / max(float(np.linalg.norm(to_eye)), 1e-9)
         dot = max(r * 0.12, 0.5)
-        centre = np.asarray(mk["at"], float) + to_eye * dot * 0.7
+        centre = mark_at + to_eye * dot * 0.7
         ball = trimesh.creation.icosphere(subdivisions=2, radius=dot)
         ball.apply_translation(centre)
         for m in (_disc(centre, r, to_eye), ball):
@@ -478,14 +488,16 @@ def render_reply(sub_id, name=None, shadow=None, highlight=None, size=None, stag
 
 
 def say(sub_id, text, state=None, shadow=None, highlight=None, did=None, picture=True,
-        shadow_picture=True):
+        shadow_picture=True, shift=None):
     """Reply on a thread as the assistant, with a picture from the reviewer's camera.
 
     `shadow` ({part name: old mesh}) draws where something was in 3D. Without it, and with
     `shadow_picture` true, the reply shows in orange what the reviewer's own picture had and the
-    new render does not. See `render_reply`.
+    new render does not. `shift` moves the stored camera for a stage frame that moved since the
+    submission. See `render_reply`.
     """
-    shot = (render_reply(sub_id, shadow=shadow, highlight=highlight, shadow_picture=shadow_picture)
+    shot = (render_reply(sub_id, shadow=shadow, highlight=highlight, shadow_picture=shadow_picture,
+                         shift=shift)
             if picture else None)
     return append(sub_id, ASSISTANT, text, shot=shot, did=did, state=state)
 

@@ -131,6 +131,34 @@ def test_the_apart_slider_is_reproduced(tmp_path, apart, shift):
     assert iou(got, want) > 0.97
 
 
+def test_a_shift_moves_the_camera_to_a_moved_stage_frame(tmp_path):
+    # The stage file was rebuilt with its origin somewhere else: every point moved by `move`.
+    move = np.array([8.0, -6.5, 8.0])
+    stages.write_stages({"assembled": {"block": block().apply_translation(move)}}, tmp_path)
+    subs = tmp_path / "submissions"
+    d = submission(subs)
+    # in open space above the block, so no part of the circle is hidden and its centre can be read
+    d["mark"] = {"part": "block", "at": [6.0, -3.0, 34.0], "r_mm": 5.0}
+    (subs / "s1.json").write_text(json.dumps(d))
+    thread.configure(subs, tmp_path / "stages")
+    want = silhouette(block(), d["camera"]["eye"], d["camera"]["at"], 32, 900, 500)
+
+    plain = reply_mask(subs, thread.render_reply("s1", name="plain.png", mark=False,
+                                                 shadow_picture=False))
+    assert iou(plain, want) < 0.8            # without the shift the block is off the old picture
+    moved = reply_mask(subs, thread.render_reply("s1", name="moved.png", mark=False,
+                                                 shadow_picture=False, shift=move))
+    assert iou(moved, want) > 0.97
+
+    # The circle moves with the camera, so it stays on the point the reviewer marked.
+    with_mark = thread.read_png(subs / thread.render_reply("s1", name="mark.png", shift=move,
+                                                           shadow_picture=False))
+    r, g, b = (with_mark[..., i].astype(int) for i in range(3))
+    ys, xs = np.nonzero((r > 200) & (r - b > 120) & (g > 110) & (g < 190))
+    px = three_pixels([d["mark"]["at"]], d["camera"]["eye"], d["camera"]["at"], 32, 900, 500)[0]
+    assert len(xs) > 50 and abs(xs.mean() - px[0]) < 3 and abs(ys.mean() - px[1]) < 3
+
+
 def square(img, y0, y1, x0, x1, colour=(200, 200, 196)):
     img[y0:y1, x0:x1] = colour
 
