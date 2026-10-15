@@ -13,6 +13,10 @@ A project builds a `Bench` with its own folders and plug-ins and calls `serve(be
   always reported as up to date.
 - `publish_text` is a callable `(ids, subs, stamp, manifest_name) -> str` that builds the message
   sent on publish.
+- `may_post` is a callable `(client_address, headers)` asked before every POST (submit, comment,
+  publish, rebuild and the project's own). It returns None to allow the post, or a reason, and the
+  post is refused with 403 and that reason. `review3d.bench.access.tailnet_users` is one for a bench
+  reached over Tailscale. Without it every caller that reaches the bench may post.
 - `extra_get` and `extra_post` are callables `(handler, route)` for routes the project adds. They
   return False when the route is not theirs. Any other return value means the route was answered.
 
@@ -44,7 +48,7 @@ def _default_publish_text(ids, subs, stamp, manifest_name):
 
 class Bench:
     def __init__(self, model_dirs, subs_dir, stages_dir, notifier=None, rebuild=None, fresh=None,
-                 publish_text=None, extra_get=None, extra_post=None, log=print):
+                 publish_text=None, extra_get=None, extra_post=None, log=print, may_post=None):
         self.model_dirs = [pathlib.Path(d) for d in model_dirs]
         self.subs = pathlib.Path(subs_dir)
         self.stages = pathlib.Path(stages_dir)
@@ -55,6 +59,7 @@ class Bench:
         self.extra_get = extra_get
         self.extra_post = extra_post
         self.log = log
+        self.may_post = may_post
         _TH.configure(self.subs, self.stages)
 
     @property
@@ -156,6 +161,14 @@ def make_handler(bench):
 
         def do_POST(self):
             route = self.path.split("?")[0]
+            if bench.may_post is not None:
+                try:
+                    why = bench.may_post(self.client_address[0], self.headers)
+                except Exception as e:
+                    why = f"the check could not decide ({type(e).__name__})"
+                if why:
+                    bench.log(f"  refused a post to {route} from {self.client_address[0]}: {why}")
+                    return self.send_json({"ok": False, "error": f"refused: {why}"}, 403)
             try:
                 if route == "/api/rebuild":
                     if not bench.rebuild:

@@ -249,3 +249,33 @@ def test_serve_raises_when_its_port_is_taken(tmp_path):
         taken.listen()
         with pytest.raises(OSError):
             server.serve(b, taken.getsockname()[1], ["127.0.0.1"])
+
+
+def test_a_post_the_check_refuses_changes_nothing(tmp_path):
+    stages.write_stages({"parts": {"lid": trimesh.creation.box((10, 10, 10))}}, tmp_path)
+    subs = tmp_path / "submissions"
+    logs = []
+    b = server.Bench([tmp_path], subs, tmp_path / "stages", log=logs.append,
+                     may_post=lambda ip, headers: "not you")
+    srv = server._Server(("127.0.0.1", 0), server.make_handler(b))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    b.url = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        with pytest.raises(urllib.error.HTTPError) as e:
+            submit_move(b)
+        assert e.value.code == 403 and "not you" in json.loads(e.value.read())["error"]
+        assert not subs.exists() or not list(subs.glob("*.json"))
+        assert any("refused a post to /api/submit" in m for m in logs)
+        assert get(b, "/stages.json")[0] == 200          # reading stays open
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_settings_turn_the_tailnet_check_on(tmp_path):
+    from review3d.bench import settings
+    (tmp_path / "bench.toml").write_text('post_from = ["alice@example.com"]\n')
+    may = settings.may_post(settings.load(tmp_path / "bench.toml"))
+    assert may is not None and may("127.0.0.1", {}) is None
+    assert "neither this machine" in may("192.0.2.4", {})
+    assert settings.may_post(settings.load(tmp_path / "none.toml")) is None
