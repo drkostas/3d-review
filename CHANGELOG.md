@@ -6,6 +6,7 @@
 - The picture shadow. Without an old mesh, `say` and `render_reply` compare the reviewer's before picture with the new render and paint in orange what was model then and is empty space now (`shadow_picture=True` by default). `thread.picture_shadow(before, after)` does the same for any two pictures.
 - `say` and `render_reply` take `shift=(x, y, z)`, which moves the stored camera and circle to a stage file whose frame moved since the submission (a build that re-centres the scene, for example).
 - `thread.read_png` reads 8-bit PNG files with the standard library and numpy, and `thread.reply_frame(submission)` gives the lens and size a reply uses.
+- The bench names a turn's axis (`turn_axis_named`) only when the turn is within 2 degrees of it. The bar was 14 degrees, so a turn with a visible tilt in it was labelled "world z" while `turn_axis` held the tilted axis. Any other turn reads "a free axis", with the nearest named axis and how far from it, for example "a free axis, 11° from world z".
 
 ## 0.1.1
 
