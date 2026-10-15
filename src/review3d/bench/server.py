@@ -21,9 +21,12 @@ pictures and the exact transform. Applying it is a separate step that the assist
 """
 import base64
 import datetime as _dt
+import errno
 import json
 import pathlib
 import socketserver
+import threading
+import time
 from http.server import SimpleHTTPRequestHandler
 
 from review3d.bench import thread as _TH
@@ -251,6 +254,55 @@ class _Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
 
-def serve(bench, port, host=""):
-    """Serve the bench on every interface (host "") or on one address. Blocks until stopped."""
-    _Server((host, port), make_handler(bench)).serve_forever()
+def addresses(host):
+    """The addresses a `host` setting names: "" (every interface) or one address is one item, and a
+    list is each of its items."""
+    return [host] if isinstance(host, str) else [str(h) for h in host]
+
+
+def _bind(addr, port, handler, log):
+    """A server on `addr`, or None when that address is not on this machine yet."""
+    try:
+        return _Server((addr, port), handler)
+    except OSError as e:
+        if e.errno != errno.EADDRNOTAVAIL:
+            raise
+        log(f"  {addr}:{port} is not on this machine yet; trying it again until it is")
+        return None
+
+
+def _bind_later(addr, port, handler, log, retry_s):
+    while True:
+        time.sleep(retry_s)
+        srv = _bind(addr, port, handler, lambda _m: None)
+        if srv is not None:
+            log(f"  now also on {addr}:{port}")
+            srv.serve_forever()
+            return
+
+
+def serve(bench, port, host="", retry_s=30.0):
+    """Serve the bench and block until stopped.
+
+    `host` is "" for every interface, one address, or a list of addresses. A list such as
+    `["127.0.0.1", "192.0.2.7"]` answers on this machine and on one other address of it (a VPN
+    address, say) and on nothing else, so other devices on the same local network cannot reach a
+    bench that has no login. An address that is not on this machine yet, such as a VPN address
+    when the bench starts before the VPN, is tried again every `retry_s` seconds until it binds.
+    Any other error, a port already in use for example, is raised.
+    """
+    handler = make_handler(bench)
+    running = []
+    for addr in addresses(host):
+        srv = _bind(addr, port, handler, bench.log)
+        if srv is None:
+            threading.Thread(target=_bind_later, args=(addr, port, handler, bench.log, retry_s),
+                             daemon=True).start()
+        else:
+            running.append(srv)
+    for srv in running[1:]:
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+    if running:
+        running[0].serve_forever()
+    else:
+        threading.Event().wait()

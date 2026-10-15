@@ -1,6 +1,6 @@
 """The `3d-review` command.
 
-    3d-review bench [--config bench.toml] [--port N] [--host H]
+    3d-review bench [--config bench.toml] [--port N] [--host H ...]
     3d-review stages part1.stl part2.stl ... -o DIR
     3d-review skill [--dir ~/.claude/skills]
 
@@ -27,7 +27,7 @@ def _bench(args):
     subs = pathlib.Path(cfg["subs_dir"])
     bench = server.Bench(cfg["model_dirs"], subs, cfg["stages_dir"],
                          notifier=FileNotifier(subs / "published" / "notifications.log"))
-    shown = host or "localhost"
+    shown = next(iter(server.addresses(host)), "") or "localhost"
     print(f"review bench on http://{shown}:{port}/twist.html (threads at /threads.html)",
           flush=True)
     try:
@@ -67,7 +67,9 @@ def main(argv=None):
     b = sub.add_parser("bench", help="serve the review bench")
     b.add_argument("--config", default="bench.toml", help="settings file (default bench.toml)")
     b.add_argument("--port", type=int, default=None, help="port, overrides the settings file")
-    b.add_argument("--host", default=None, help="address to listen on, overrides the settings file")
+    b.add_argument("--host", default=None, action="append",
+                   help="address to listen on, overrides the settings file; give it more than once "
+                        "for several addresses")
     b.set_defaults(fn=_bench)
 
     s = sub.add_parser("stages", help="write one stage called 'parts' from mesh files")
