@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The bench can listen on several addresses. `host` in the settings file (or `--host` given more than once) takes a list, for example `["127.0.0.1", "192.0.2.7"]`, so a bench with no login answers on this machine and on one other address of it, such as a VPN address, and not to other devices on the same local network. An address that is not on the machine yet, such as a VPN address when the bench starts before the VPN, is tried again in the background until it binds.
 - `thread.append(..., caption=)` gives a reply picture its own caption. The threads page shows it under the picture, and keeps its usual line (the reviewer's camera, the old position in orange) for a picture without one, so a close-up or a cut-away is no longer described as a view from the reviewer's camera.
 - Reply pictures line up with the reviewer's picture. `render_reply` uses the lens (`view.fov`) and the frame (`view.width` by `view.height`, scaled down to at most 1600 px wide) stored with the submission, instead of a fixed lens and size. It also applies each GLB node's transform and the "apart" slider of the parts stage, as the page does, draws the number labels, and draws on the page's background colour.
 - The picture shadow. Without an old mesh, `say` and `render_reply` compare the reviewer's before picture with the new render and paint in orange what was model then and is empty space now (`shadow_picture=True` by default). `thread.picture_shadow(before, after)` does the same for any two pictures.

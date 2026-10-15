@@ -200,3 +200,52 @@ def test_pivots_follow_each_stage_and_carries_are_written(tmp_path):
     assert info["parts"]["pivots"] == {"hand": [8.0, 0.0, 5.0]}      # moved with the hand's box
     assert info["meta"]["carries"] == {"hand": ["cup"]}
     assert "pivots" not in info["parts"] or "cup" not in info["parts"]["pivots"]
+
+
+def test_the_host_setting_names_one_address_or_several():
+    assert server.addresses("") == [""]
+    assert server.addresses("127.0.0.1") == ["127.0.0.1"]
+    assert server.addresses(["127.0.0.1", "192.0.2.7"]) == ["127.0.0.1", "192.0.2.7"]
+
+
+def _free_port():
+    import socket
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def test_serve_answers_on_its_address_and_keeps_trying_one_not_here_yet(tmp_path):
+    # 192.0.2.7 is a documentation address no machine has, like a VPN address before the VPN is up:
+    # the bench answers on the address it can bind and keeps trying the other in the background.
+    import time
+    stages.write_stages({"parts": {"lid": trimesh.creation.box((10, 10, 10))}}, tmp_path)
+    logs = []
+    b = server.Bench([tmp_path], tmp_path / "submissions", tmp_path / "stages", log=logs.append)
+    port = _free_port()
+    t = threading.Thread(target=server.serve, args=(b, port, ["192.0.2.7", "127.0.0.1"]),
+                         kwargs={"retry_s": 0.05}, daemon=True)
+    t.start()
+    body = None
+    for _ in range(100):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/stages.json") as r:
+                body = json.loads(r.read())
+            break
+        except OSError:
+            time.sleep(0.05)
+    assert body is not None and "parts" in body
+    assert any("192.0.2.7" in m and "not on this machine yet" in m for m in logs)
+    time.sleep(0.2)
+    assert t.is_alive()
+
+
+def test_serve_raises_when_its_port_is_taken(tmp_path):
+    import socket
+    stages.write_stages({"parts": {"lid": trimesh.creation.box((10, 10, 10))}}, tmp_path)
+    b = server.Bench([tmp_path], tmp_path / "submissions", tmp_path / "stages", log=lambda _m: None)
+    with socket.socket() as taken:
+        taken.bind(("127.0.0.1", 0))
+        taken.listen()
+        with pytest.raises(OSError):
+            server.serve(b, taken.getsockname()[1], ["127.0.0.1"])

@@ -1,7 +1,8 @@
 """Bench settings read from a small TOML file, so machine-specific values stay out of the code.
 
     port = 8766                 # the port the bench listens on
-    host = ""                   # "" listens on every interface, "127.0.0.1" on this machine only
+    host = ""                   # "" listens on every interface, "127.0.0.1" on this machine only,
+                                # and ["127.0.0.1", "192.0.2.7"] on each address in the list
     model_dirs = ["."]          # searched first for stages.json, stages/*.glb and extra pages
     subs_dir = "submissions"    # where the threads are stored
     stages_dir = "stages"       # the stage files used to render reply pictures
