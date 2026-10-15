@@ -67,13 +67,21 @@ def _frame(mesh):
 
 
 def write_stages(stages, out_dir, faces=None, offsets=None, colours=None, meta=None,
-                 labels=None, order=None, default=None):
+                 labels=None, order=None, default=None, pivots=None, carries=None,
+                 pivot_stage=None):
     """Write `stages` ({stage: {part: Trimesh}}) for the bench and return the stages.json dict.
 
     `faces` is the direction the model faces (three numbers) or None. `offsets` is
     {part name: [x, y, z]} for the "parts" stage's slider. `colours` is {part name: RGBA}, and any
     part not named there is drawn in `PART_COLOUR`. `meta` is a dict of extra keys for the `meta`
     entry.
+
+    `pivots` is {part name: [x, y, z]}, the point the bench turns that part about instead of the
+    middle of its box (a hand turns about its wrist). The points are in the coordinates of
+    `pivot_stage` ("assembled" when there is one, otherwise the first stage), and each other stage
+    gets them moved by however far the part's own box moved between the two stages. `carries` is
+    {part name: [part names]}: the parts the bench moves and turns together with it (a cup in a
+    hand), the way the build will.
     """
     for name in list(order or []) + ([default] if default else []) + list(labels or {}):
         if name not in stages:
@@ -119,6 +127,21 @@ def write_stages(stages, out_dir, faces=None, offsets=None, colours=None, meta=N
     for key, value in (("stage_labels", labels), ("stage_order", order), ("default_stage", default)):
         if value:
             info["meta"][key] = dict(value) if key == "stage_labels" else (list(value) if key == "stage_order" else value)
+    if pivots:
+        ref = pivot_stage or ("assembled" if "assembled" in stages else next(iter(stages)))
+        if ref not in stages:
+            raise ValueError(f"pivot_stage {ref!r} is not a stage")
+        for stage, parts in stages.items():
+            got = {}
+            for name, at in pivots.items():
+                if name not in parts or name not in stages[ref]:
+                    continue
+                shift = parts[name].bounds.mean(axis=0) - stages[ref][name].bounds.mean(axis=0)
+                got[name] = [round(float(v), 3) for v in np.asarray(at, float) + shift]
+            if got:
+                info[stage]["pivots"] = got
+    if carries:
+        info["meta"]["carries"] = {n: [str(c) for c in cs] for n, cs in carries.items()}
     if meta:
         info["meta"].update(meta)
     (out_dir / "stages.json").write_text(json.dumps(info, indent=2))

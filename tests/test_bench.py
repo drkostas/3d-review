@@ -169,3 +169,22 @@ def test_stage_labels_order_and_default_are_written(tmp_path):
     import pytest
     with pytest.raises(ValueError):
         write_stages({"printed": {"a": box}}, tmp_path, default="nope")
+
+
+def test_pivots_follow_each_stage_and_carries_are_written(tmp_path):
+    import trimesh
+    from review3d import stages as st
+    hand = trimesh.creation.box(extents=[4, 4, 4])
+    cup = trimesh.creation.cylinder(radius=1.0, height=3.0)
+    cup.apply_translation([4.0, 0.0, 0.0])
+    apart_hand = hand.copy()
+    apart_hand.apply_translation([10.0, 0.0, 5.0])
+    apart_cup = cup.copy()
+    apart_cup.apply_translation([20.0, 0.0, 5.0])
+    info = st.write_stages({"assembled": {"hand": hand, "cup": cup},
+                            "parts": {"hand": apart_hand, "cup": apart_cup}}, tmp_path,
+                           pivots={"hand": [-2.0, 0.0, 0.0]}, carries={"hand": ["cup"]})
+    assert info["assembled"]["pivots"] == {"hand": [-2.0, 0.0, 0.0]}
+    assert info["parts"]["pivots"] == {"hand": [8.0, 0.0, 5.0]}      # moved with the hand's box
+    assert info["meta"]["carries"] == {"hand": ["cup"]}
+    assert "pivots" not in info["parts"] or "cup" not in info["parts"]["pivots"]
