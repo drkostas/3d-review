@@ -1,6 +1,7 @@
 """The bench server, run for real on a free port, driven the way its pages drive it."""
 import base64
 import json
+import pathlib
 import threading
 import urllib.error
 import urllib.request
@@ -153,6 +154,17 @@ def test_thread_authors_are_checked(bench):
         thread.append(sid, "someone", "text")
     with pytest.raises(ValueError):
         thread.append(sid, thread.ASSISTANT, "text", state="published")
+
+
+def test_a_reply_picture_can_carry_its_own_caption(bench):
+    sid = submit_move(bench)["id"]
+    thread.append(sid, thread.ASSISTANT, "a close look", shot="close.png", caption="a closer view")
+    thread.append(sid, thread.ASSISTANT, "from the camera", shot="reply.png")
+    turns = thread.read(sid)["thread"]
+    assert turns[-2]["caption"] == "a closer view"
+    assert "caption" not in turns[-1]
+    page = (pathlib.Path(thread.__file__).parent / "static" / "threads.html").read_text()
+    assert "esc(t.caption ||" in page
 
 
 def test_stage_labels_order_and_default_are_written(tmp_path):
