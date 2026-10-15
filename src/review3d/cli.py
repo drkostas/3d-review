@@ -26,7 +26,8 @@ def _bench(args):
     host = args.host if args.host is not None else cfg["host"]
     subs = pathlib.Path(cfg["subs_dir"])
     bench = server.Bench(cfg["model_dirs"], subs, cfg["stages_dir"],
-                         notifier=FileNotifier(subs / "published" / "notifications.log"))
+                         notifier=FileNotifier(subs / "published" / "notifications.log"),
+                         may_post=settings.may_post(cfg))
     shown = next(iter(server.addresses(host)), "") or "localhost"
     print(f"review bench on http://{shown}:{port}/twist.html (threads at /threads.html)",
           flush=True)
