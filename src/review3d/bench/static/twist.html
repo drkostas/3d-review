@@ -367,19 +367,27 @@ function boxCentre(o) {
   return [c.x, c.y, c.z].map(v => +v.toFixed(3));
 }
 
+/* An axis is named only when the turn is really about it. The bar used to be 14 degrees, so a turn
+   with a visible tilt in it was shown as "about world z" while the numbers sent were 11 degrees
+   off vertical, and a build that trusted the name made a different turn from the one the numbers
+   describe. Within 2 degrees the name and the numbers agree to well under the 5 degree Snap step.
+   Anything else is a free axis, with the nearest named axis and how far from it, so the reviewer
+   sees the tilt before sending. */
+const AXIS_NAME_DEG = 2;
 function axisName(ax) {
   const pf = ghostOf && partFrame(ghostOf.userData.partName);
+  const named = [];
   const names = ['its long axis', 'its middle axis', 'its short axis'];
-  if (pf) for (let i = 0; i < 3; i++) {
-    const d = pf.axes[i].dot(ax);
-    if (Math.abs(d) > 0.97) return (d < 0 ? '-' : '') + names[i];
-  }
+  if (pf) for (let i = 0; i < 3; i++) named.push([names[i], pf.axes[i].dot(ax)]);
   const w = [['x', 1,0,0], ['y', 0,1,0], ['z', 0,0,1]];
-  for (const [n, x, y, z] of w) {
-    const d = ax.x*x + ax.y*y + ax.z*z;
-    if (Math.abs(d) > 0.97) return (d < 0 ? '-' : '') + 'world ' + n;
+  for (const [n, x, y, z] of w) named.push(['world ' + n, ax.x*x + ax.y*y + ax.z*z]);
+  let best = null;
+  for (const [n, d] of named) {
+    const off = THREE.MathUtils.radToDeg(Math.acos(Math.min(1, Math.abs(d))));
+    if (off <= AXIS_NAME_DEG) return (d < 0 ? '-' : '') + n;
+    if (!best || off < best[1]) best = [n, off];
   }
-  return 'a free axis';
+  return best ? 'a free axis, ' + best[1].toFixed(0) + '° from ' + best[0] : 'a free axis';
 }
 function showDelta() {
   /* One exit, so the Submit button is enabled from both halves (a change and a mark) whatever

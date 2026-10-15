@@ -80,6 +80,9 @@ Each `submissions/<id>.json` holds `kind` ("move" or "mark"), `stage`, `part`, `
 `r_mm`) or `change` (`move_mm`, `move_len_mm`, `turn_deg`, `turn_axis`, `turn_axis_named`,
 `space`, `scale`, `centre_before`, `centre_after`).
 
+`turn_axis_named` names an axis only when the turn is within 2 degrees of it. Otherwise it says
+"a free axis" and how far the nearest named axis is, so `turn_axis` is always the turn itself.
+
 - Open both pictures before reading the numbers. The after picture hides the original and shows
   the ghost in its place, so flipping between the two shows only what changed.
 - A move is relative to the build the person was looking at. `centre_after` is where they put the
