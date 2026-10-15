@@ -147,7 +147,7 @@ async function open(id) {
        + '<div class="who">' + (t.by === 'assistant' ? 'assistant' : 'you') + ' · ' + esc((t.at || '').slice(0, 16).replace('T', ' ')) + '</div>'
        + esc(t.text).replace(/\n/g, '<br>');
     if (t.did) h += '<pre class="nums">' + esc(typeof t.did === 'string' ? t.did : JSON.stringify(t.did, null, 1)) + '</pre>';
-    if (t.shot) h += '<div class="shots"><figure><img class="shot" src="/api/sub/' + t.shot + '" alt="the change"><figcaption>the change, from your camera. The old position is the orange shadow</figcaption></figure></div>';
+    if (t.shot) h += '<div class="shots"><figure><img class="shot" src="/api/sub/' + t.shot + '" alt="the change"><figcaption>' + esc(t.caption || 'the change, from your camera. The old position is the orange shadow') + '</figcaption></figure></div>';
     h += '</div>';
   }
   h += '<div style="margin-top:16px"><textarea id="say" placeholder="Reply here. It stays on this comment"></textarea>'

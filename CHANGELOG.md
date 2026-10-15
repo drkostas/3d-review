@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `thread.append(..., caption=)` gives a reply picture its own caption. The threads page shows it under the picture, and keeps its usual line (the reviewer's camera, the old position in orange) for a picture without one, so a close-up or a cut-away is no longer described as a view from the reviewer's camera.
 - Reply pictures line up with the reviewer's picture. `render_reply` uses the lens (`view.fov`) and the frame (`view.width` by `view.height`, scaled down to at most 1600 px wide) stored with the submission, instead of a fixed lens and size. It also applies each GLB node's transform and the "apart" slider of the parts stage, as the page does, draws the number labels, and draws on the page's background colour.
 - The picture shadow. Without an old mesh, `say` and `render_reply` compare the reviewer's before picture with the new render and paint in orange what was model then and is empty space now (`shadow_picture=True` by default). `thread.picture_shadow(before, after)` does the same for any two pictures.
 - `say` and `render_reply` take `shift=(x, y, z)`, which moves the stored camera and circle to a stage file whose frame moved since the submission (a build that re-centres the scene, for example).

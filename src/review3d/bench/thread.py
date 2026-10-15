@@ -108,13 +108,18 @@ def every(newest_first=True):
     return out
 
 
-def append(sub_id, by, text, shot=None, did=None, state=None):
+def append(sub_id, by, text, shot=None, did=None, state=None, caption=None):
     """Add one turn to the thread. `by` is `REVIEWER` or `ASSISTANT` and nothing else.
 
     The author is checked so that the history of a thread can be trusted to say who wrote what.
     `shot` is the file name of a reply picture, `did` describes what changed (in numbers, when
     something changed), and `state` moves the thread to one of `STATES`. A reviewer entry without
     an explicit state reopens the thread as `new`.
+
+    `caption` is the line the page shows under the picture. Without it the page says the picture
+    is from the reviewer's camera with the old position in orange, which is what `say` draws. A
+    picture drawn another way (a close-up, a cut-away, a view from the side) needs its own caption,
+    or the page describes it wrongly.
     """
     if by not in (REVIEWER, ASSISTANT):
         raise ValueError(f"an entry is by {REVIEWER!r} or by {ASSISTANT!r}, not {by!r}")
@@ -123,6 +128,8 @@ def append(sub_id, by, text, shot=None, did=None, state=None):
              "text": (text or "").strip()}
     if shot:
         entry["shot"] = shot
+        if caption:
+            entry["caption"] = str(caption).strip()
     if did:
         entry["did"] = did
     d["thread"].append(entry)
