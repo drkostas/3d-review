@@ -282,11 +282,25 @@ function partFrame(name) {
   const M = new THREE.Matrix4().makeBasis(a[0], a[1], a[2]);
   return {q: new THREE.Quaternion().setFromRotationMatrix(M), axes: a, spread: f.spread || null};
 }
+/* Where a part turns: the stage's pivot for it when stages.json names one (a hand turns about its
+   wrist, not about the middle of its box), otherwise the middle of its box. */
+function pivotOf(src) {
+  const pv = META && META[stage] && META[stage].pivots && META[stage].pivots[src.userData.partName];
+  return pv ? new THREE.Vector3(pv[0], pv[1], pv[2])
+            : src.geometry.boundingBox.getCenter(new THREE.Vector3());
+}
+/* The parts that move and turn with this one (a cup in a hand), from stages.json `meta.carries`. */
+function carriedBy(name) {
+  const c = META && META.meta && META.meta.carries && META.meta.carries[name];
+  if (!c) return [];
+  return picks.filter(p => c.includes(p.userData.partName));
+}
+let ghostMain = null;
 function makeGhost(src) {
   dropGhost();
   /* The part may be drawn away from its baked place (the apart slider moves it by `position`), so
-     the ghost's home is the baked centre plus that offset. */
-  const centre = src.geometry.boundingBox.getCenter(new THREE.Vector3()).add(src.position);
+     the ghost's home is its pivot plus that offset. */
+  const centre = pivotOf(src).add(src.position);
   const grp = new THREE.Group();
   grp.position.copy(centre);
   /* The ghost's frame is the part's own axes. The loader bakes every part to identity, so "local"
@@ -314,7 +328,16 @@ function makeGhost(src) {
   edge.position.copy(m.position);
   edge.quaternion.copy(m.quaternion);
   grp.add(edge);
+  /* A carried part is drawn as a ghost too, placed in the group the same way, so it turns and
+     moves with the part that holds it. The submission still names only the picked part. */
+  for (const c of carriedBy(src.userData.partName)) {
+    const mc = new THREE.Mesh(c.geometry, m.material);
+    mc.quaternion.copy(ghostHomeQ.clone().invert());
+    mc.position.copy(c.position.clone().sub(centre)).applyQuaternion(ghostHomeQ.clone().invert());
+    grp.add(mc);
+  }
   scene.add(grp);
+  ghostMain = m;
   ghost = grp; ghostOf = src; ghostHome = centre.clone();
   gizmo.attach(grp);
   gizmoArt.visible = (mode !== 'mark');
@@ -328,7 +351,7 @@ function dropGhost() {
   gizmo.detach();
   gizmoArt.visible = false;
   if (ghost) scene.remove(ghost);
-  ghost = null; ghostOf = null; ghostHome = null;
+  ghost = null; ghostOf = null; ghostHome = null; ghostMain = null;
   document.getElementById('who').textContent = 'Tap a part to pick it up';
   showDelta();
 }
@@ -358,7 +381,7 @@ function change() {
        after the submission, and the two centres let the move be read as a place rather than as an
        offset against an older build. */
     centre_before: ghostOf ? boxCentre(ghostOf) : null,
-    centre_after: boxCentre(ghost),
+    centre_after: boxCentre(ghostMain || ghost),
   };
 }
 

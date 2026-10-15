@@ -56,6 +56,9 @@ stages.write_stages({"parts": laid_out, "assembled": assembled}, "model",
 
 - A stage named "parts" gets an "apart" slider when `offsets` is given.
 - Parts named "base" or "no" plus digits (number labels) are drawn but cannot be picked.
+- A part that turns about a joint, not its own middle, needs `pivots={part: point}`, and a part that moves
+  with it needs `carries={part: [names]}`. Without them the bench shows a hand turning about its own
+  middle and leaving the cup behind, which is not what the build will do with the same numbers.
 - `stages.json` stores each part's principal axes, so the person can turn a part about its own
   length with the "Part" space. Without them "any axis" is impossible.
 - The bench has no login. Keep `host = "127.0.0.1"` or a private network. The person often reads
