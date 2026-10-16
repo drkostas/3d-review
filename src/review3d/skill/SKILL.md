@@ -273,6 +273,31 @@ the bench instead.
 - Before restarting a bench that spawns rebuilds, stop its child processes too. An orphaned child
   keeps holding the rebuild lock and every later rebuild is skipped.
 
+## Before the first print
+
+A model that passes every fit row can still print badly, and the board has to say so before
+anything goes to the printer. Give each of these a row and a fault.
+
+- **Every wall prints, as the part lies on the plate.** Use 3d-base's
+  `print_thin_spots(part, backed_mm=1.0)` on each part in its print position, not as modelled. An
+  upright wall needs two lines across a layer and a flat plate two layers through it. Leave out edges
+  and small places by area, and name each part or place the row does not judge, with the reason.
+- **The file is the model.** Check the exported card with 3d-base's `as_written`. A part that is one
+  closed body in memory can read back from an STL with holes and extra bodies, because a boolean can
+  keep vertices apart only by index.
+- **The slice is the plan.** Slice with the saved profile, then read the G-code back. Confirm that
+  each setting landed, that the plate is right and that the first layer is the largest. Then cut
+  the model layer by layer and measure how much of each wall the paths cover. Before reporting a
+  piece as unprinted, check that the model holds a point of it, because a section of a mesh with
+  touching edges can close a loop with a chord across open air.
+- **Show a thickening as before and after.** Make two real builds on one sheet, the left with the
+  change switched off, from outside and cut in half, coloured by wall thickness. Measure "the outside
+  did not move" in a way that suits the change. For a part grown on its inside, a check of how far
+  the new part stands out of the old one counts the new inner wall, which sits in the old hollow.
+- **Ask about what is left with what you tried.** When a place cannot be thickened without changing
+  the look, build the option, measure it, and put the numbers on the sheet. "5% wider still left it
+  0.45 mm" lets the person decide. "It can't be done" does not.
+
 ## If you change the bench page
 
 The page keeps `[hidden] { display: none !important; }` because an id rule with `display` beats the
@@ -319,6 +344,8 @@ Penpot's exporter service and is much slower.
 | Fixed a new element, not the named one | did not search | search for every instance | fix all, render the named element |
 | Undid the person's own decision | acted on a stale task list | read the record first | the record wins, say so |
 | Facets or spikes on a smooth part | shading, not geometry | render two ways | fix the renderer, keep the old method as a red case |
+| A wall prints as one weak line, every row green | thickness never measured, or measured as modelled | `print_thin_spots` on the part as it lies | a row per part, with a fault (a thin fin) |
+| The slicer shows holes in a part the board calls solid | vertices apart only by index, welded by the STL | `as_written` on the exported file | turn coincident tessellations, keep fills inside the material |
 
 ## Before calling a design done
 
