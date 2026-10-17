@@ -294,9 +294,12 @@ anything goes to the printer. Give each of these a row and a fault.
   change switched off, from outside and cut in half, coloured by wall thickness. Measure "the outside
   did not move" in a way that suits the change. For a part grown on its inside, a check of how far
   the new part stands out of the old one counts the new inner wall, which sits in the old hollow.
-- **Ask about what is left with what you tried.** When a place cannot be thickened without changing
-  the look, build the option, measure it, and put the numbers on the sheet. "5% wider still left it
-  0.45 mm" lets the person decide. "It can't be done" does not.
+- **Nothing stays at one line, and that is not a question for the person.** When a wall runs from
+  plenty at one place down to one line at another, the thin end is the design error: grow the part
+  until its thinnest wall reaches the bar, or cut the feature so it ends square, measure it on the
+  build, and show before and after. A sheet that asks "leave it as one line?" offers a brittle part
+  as a choice, and the person who answered "leave it" the night before said the next morning that
+  nothing may be one line. Ask about what the fix costs to the look, never whether to fix it.
 
 ## If you change the bench page
 
