@@ -495,18 +495,21 @@ def render_reply(sub_id, name=None, shadow=None, highlight=None, size=None, stag
 
 
 def say(sub_id, text, state=None, shadow=None, highlight=None, did=None, picture=True,
-        shadow_picture=True, shift=None):
+        shadow_picture=True, shift=None, caption=None, **frame):
     """Reply on a thread as the assistant, with a picture from the reviewer's camera.
 
     `shadow` ({part name: old mesh}) draws where something was in 3D. Without it, and with
     `shadow_picture` true, the reply shows in orange what the reviewer's own picture had and the
     new render does not. `shift` moves the stored camera for a stage frame that moved since the
-    submission. See `render_reply`.
+    submission. `frame` passes `render_reply`'s own options through (`fov` for a closer look,
+    `mark=False` to leave out a circle that no longer marks anything, `size`, `stage`, `labels`).
+    A picture that is not the reviewer's own view (a closer lens, a moved camera) needs a `caption`
+    saying what it shows, or the page describes it as their camera. See `render_reply`.
     """
     shot = (render_reply(sub_id, shadow=shadow, highlight=highlight, shadow_picture=shadow_picture,
-                         shift=shift)
+                         shift=shift, **frame)
             if picture else None)
-    return append(sub_id, ASSISTANT, text, shot=shot, did=did, state=state)
+    return append(sub_id, ASSISTANT, text, shot=shot, did=did, state=state, caption=caption)
 
 
 if __name__ == "__main__":

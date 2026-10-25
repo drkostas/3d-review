@@ -127,6 +127,10 @@ thread.say(sid2, "Trimmed the tab. Orange is what was taken off.", state="fixed"
   submissions made before the frame was fixed, measure the shift once (render with a few trial
   shifts and keep the one whose outline matches the before picture best on parts that did not
   change) and pass it as `shift=(x, y, z)` to `say` or `render_reply`.
+- `say` passes `render_reply`'s options through: `fov=` for a closer look at a surface, and
+  `mark=False` when the circle no longer marks anything (the part moved on a re-laid layout). A
+  picture that is not the person's own view needs `caption=` saying what it shows, or the page
+  calls it their camera.
 - Open every reply PNG before sending it. A reply picture that does not show the change answers
   nothing.
 - States are `new` (waiting on you), `answered` (waiting on the person), `fixed` (done, with a
