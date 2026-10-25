@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `say` passes `render_reply`'s options through (`fov`, `mark`, `size`, `stage`, `labels`) and takes `caption`, so a closer reply, or one without a circle that no longer marks anything, is one call and is captioned for what it shows.
 - The skill's section on the first print says that nothing stays at one line and that this is not a question for the person: the thin end is changed, measured and shown.
 - The skill has a section on what to check before the first print: every wall as the part lies on the plate, the exported file read back as one solid, the slice read back against the saved profile, and how to show a thickening and ask about what is left. Two rows join its failure catalogue.
 - Who may post. `Bench(may_post=)` is asked before every POST (submit, comment, publish, rebuild and a project's own routes) and refuses the post with 403 and its reason. `review3d.bench.access.tailnet_users(logins, devices=None)` is one for a bench reached over Tailscale: a program on the same machine may post, a request through Tailscale Serve is judged by the login Serve sets, a direct Tailscale caller by `tailscale whois` of its address, and tagged devices and other addresses are refused. `post_from`, `post_devices` and `tailscale` in the settings file turn it on. What the reviewer posts reaches the assistant as the reviewer's words, so on a bench others can reach this decides who may speak for the reviewer.

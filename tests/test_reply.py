@@ -271,3 +271,20 @@ def test_say_shows_removed_material_from_the_reviewers_picture(tmp_path):
     assert (out[block_px] == plain[block_px]).all()       # the kept block is drawn as it is
     near_peg = ndimage.binary_dilation(peg_px, iterations=2)
     assert not orange[~near_peg].any()                     # and nothing else is painted
+
+
+def test_say_passes_the_picture_options_through(tmp_path):
+    stages.write_stages({"assembled": {"block": block()}}, tmp_path)
+    subs = tmp_path / "submissions"
+    d = submission(subs, width=800, height=480)
+    thread.configure(subs, tmp_path / "stages")
+    wide = thread.read_png(subs / thread.render_reply("s1", name="wide.png", shadow_picture=False))
+    entry = thread.say("s1", "A closer look.", shadow_picture=False, fov=16,
+                       caption="closer than your view")["thread"][-1]
+    assert entry["caption"] == "closer than your view"
+    close = thread.read_png(subs / entry["shot"])
+    eye, at = d["camera"]["eye"], d["camera"]["at"]
+    # at half the lens the block covers about four times the pixels
+    assert silhouette(block(), eye, at, 16, 800, 480).sum() > 3 * silhouette(block(), eye, at, 32, 800, 480).sum()
+    model = lambda img: (np.abs(img.astype(int) - BG).max(axis=-1) > 12).sum()
+    assert model(close) > 3 * model(wide)
