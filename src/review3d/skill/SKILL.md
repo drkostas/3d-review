@@ -276,6 +276,12 @@ the bench instead.
   code has been quiet for `quiet_s` (5 minutes), and waits while the hold file is under an hour old.
   Touch the hold file before a run of changes you are testing in your own builds, and delete it after.
   `run_step` runs each rebuild step in its own process group, and `stop_steps` ends them before a restart.
+- A check that reads a saved state (a pose, a cached part, a measured file) in place of the build answers
+  about the figure that file was made from. When the code has moved on since, that is not the figure
+  being built, and a check that passes on the wrong figure is worse than one that fails. Stamp the file
+  when it is written and call `fresh.require_current(stamps, name, fingerprint)` before reading it. It
+  refuses a file made by other code and warns about one that was never stamped. Better still, measure
+  the build itself.
 - A picture is stale when anything that decides it changed, the model, the renderer, the template or
   the script that builds it. Hash all of them, by content, not modification time. A copied-back file
   keeps its content and changes its time, and the reverse also happens.
@@ -356,6 +362,7 @@ Penpot's exporter service and is much slower.
 | Pictures rebuild for ever | file order random in the hash | hash in two processes | sort by full path |
 | Rebuilds skipped after a restart | orphaned child holds the lock | the lock holder's parent is 1 | stop children before restarting |
 | Reply picture shows the old model | stages not rebuilt before `say` | open the reply PNG | rebuild, then reply |
+| A row passes on a figure nobody builds any more | it read a saved pose older than the build | `fresh.require_current` on the saved file | measure the build, or refuse the stale file |
 | The person cannot answer a question | prose, or a picture they cannot use | open it at phone width | one picture per option, built the same way |
 | Fixed one side of a mirrored pair | fixed per row | render the pair together | apply the fix to both |
 | Fixed a new element, not the named one | did not search | search for every instance | fix all, render the named element |

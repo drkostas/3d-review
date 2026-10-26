@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `fresh.require_current(stamps, name, fp)` refuses a saved input (a pose, a cache) made by code that has changed since, raising `StaleInput`, and warns about one that was never stamped.
+- `fresh.import_closure` takes `resolve`, the module a re-export module hands over to, and follows that module in its place.
 - `review3d.fresh` tells whether a picture or a stage file shows the current model, by content and not by date. `import_closure` reads the source files a builder reaches by import (lazy and relative imports and parent packages included), `fingerprint` hashes them in an order that depends only on names and contents, `Stamps` records which fingerprint made each picture, `verdict` lets the content check outrank the clock both ways, `Stale` carries the reason, and `lock` keeps one rebuild running at a time and frees itself when its holder died.
 - `review3d.bench.watch.Watcher` rebuilds what has fallen behind in the background, waits while the code is being edited or a hold file is fresh, and serves its `status` at `/api/fresh`. `run_step` runs a rebuild step in its own process group and `stop_steps` ends them.
 - `say` passes `render_reply`'s options through (`fov`, `mark`, `size`, `stage`, `labels`) and takes `caption`, so a closer reply, or one without a circle that no longer marks anything, is one call and is captioned for what it shows.
