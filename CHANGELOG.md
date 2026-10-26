@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `review3d.fresh` tells whether a picture or a stage file shows the current model, by content and not by date. `import_closure` reads the source files a builder reaches by import (lazy and relative imports and parent packages included), `fingerprint` hashes them in an order that depends only on names and contents, `Stamps` records which fingerprint made each picture, `verdict` lets the content check outrank the clock both ways, `Stale` carries the reason, and `lock` keeps one rebuild running at a time and frees itself when its holder died.
+- `review3d.bench.watch.Watcher` rebuilds what has fallen behind in the background, waits while the code is being edited or a hold file is fresh, and serves its `status` at `/api/fresh`. `run_step` runs a rebuild step in its own process group and `stop_steps` ends them.
 - `say` passes `render_reply`'s options through (`fov`, `mark`, `size`, `stage`, `labels`) and takes `caption`, so a closer reply, or one without a circle that no longer marks anything, is one call and is captioned for what it shows.
 - The skill's section on the first print says that nothing stays at one line and that this is not a question for the person: the thin end is changed, measured and shown.
 - The skill has a section on what to check before the first print: every wall as the part lies on the plate, the exported file read back as one solid, the slice read back against the saved profile, and how to show a thickening and ask about what is left. Two rows join its failure catalogue.

@@ -30,6 +30,8 @@ cp "$(python -c 'import review3d,os;print(os.path.dirname(review3d.__file__))')/
 
 Then open `http://localhost:8766/twist.html`. `threads.html` lists every thread. From Python, `review3d.stages.write_stages` writes any number of stages (for example "parts", "assembled" and "printed") from `{stage: {part: trimesh.Trimesh}}`, and `review3d.bench.server.Bench` takes your own notifier, rebuild hook and freshness check. The default notifier appends a line to a file, so the assistant can watch that file.
 
+Pictures that keep themselves current. `review3d.fresh` tells whether a picture or a stage file was made from the code that would make it now, by a content hash of the files it was built from (found by reading the builder's imports), so a touched or reverted file does not count as a change and a changed file copied back with an old date does. `review3d.bench.watch.Watcher` rebuilds whatever has fallen behind in the background, waits while the code is still being edited or while a hold file is fresh, and its `status` is what `/api/fresh` serves.
+
 The bench never changes the model. A submission is a request, and applying it is a separate step.
 
 ## The ledger
