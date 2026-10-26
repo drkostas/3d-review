@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - `fresh.require_current(stamps, name, fp)` refuses a saved input (a pose, a cache) made by code that has changed since, raising `StaleInput`, and warns about one that was never stamped.
 - `fresh.import_closure` takes `resolve`, the module a re-export module hands over to, and follows that module in its place.
