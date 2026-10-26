@@ -109,3 +109,27 @@ def test_run_step_reports_a_failed_step_and_ends_a_slow_one(tmp_path):
     with pytest.raises(RuntimeError):
         watch.run_step("import time; time.sleep(30)", "a slow step", timeout=1, log=lambda s: None)
     assert time.time() - t < 10
+
+
+def test_resolve_follows_a_module_that_hands_over_to_another(tmp_path):
+    proj, pkgs = _project(tmp_path)
+    (proj / "build.py").write_text("from shim import ball\n")
+    (proj / "shim.py").write_text("from importlib import import_module\nball = import_module('mylib.shapes').ball\n")
+    names = {f.name for f in fresh.import_closure("build", proj, pkgs,
+                                                  resolve=lambda n: "mylib.shapes" if n == "shim" else None)}
+    assert "shapes.py" in names and "core.py" in names and "shim.py" not in names
+
+
+def test_a_saved_input_from_older_code_is_refused(tmp_path):
+    proj, pkgs = _project(tmp_path)
+    stamps = fresh.Stamps(tmp_path / "pose" / ".stamps.json")
+    stamps.put("pose", fresh.fingerprint(fresh.import_closure("build", proj, pkgs)))
+    now = fresh.fingerprint(fresh.import_closure("build", proj, pkgs))
+    assert fresh.require_current(stamps, "pose", now)
+    (proj / "helper.py").write_text("x = 9\n")                # the code moved on after the save
+    later = fresh.fingerprint(fresh.import_closure("build", proj, pkgs))
+    with pytest.raises(fresh.StaleInput):
+        fresh.require_current(stamps, "pose", later)
+    said = []
+    assert not fresh.require_current(stamps, "pose", later, strict=False, warn=said.append) and said
+    assert not fresh.require_current(fresh.Stamps(tmp_path / "none.json"), "pose", later, warn=said.append)

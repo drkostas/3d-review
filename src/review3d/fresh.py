@@ -42,7 +42,7 @@ def _module_file(base, dotted):
     return None
 
 
-def import_closure(root, folder, packages=None, skip=()):
+def import_closure(root, folder, packages=None, skip=(), resolve=None):
     """Every source file that module `root` (a file `root.py` in `folder`) reaches by import.
 
     The files are read, not run, so an import written inside a function is found too. Imports of
@@ -50,7 +50,10 @@ def import_closure(root, folder, packages=None, skip=()):
     ({top-level name: the package's folder}), including relative imports inside them. Anything else
     (the standard library, numpy) is the edge and is not followed. Modules named in `skip` are not
     walked: a module that only reports on a picture must not date it, or editing the report
-    changes the verdict on everything it reports about. Returns the files, sorted.
+    changes the verdict on everything it reports about. `resolve(dotted)` may return the dotted
+    name of the module that one really runs, for a re-export module that hands over to another
+    (`ball = import_module("mylib.shapes").ball`), and the walk follows that module in its place.
+    Returns the files, sorted.
     """
     folder = pathlib.Path(folder)
     packages = {k: pathlib.Path(v) for k, v in (packages or {}).items()}
@@ -83,6 +86,10 @@ def import_closure(root, folder, packages=None, skip=()):
         if name in seen:
             continue
         seen.add(name)
+        target = resolve(name) if resolve is not None else None
+        if target and target != name:
+            queue.extend(with_parents(target))
+            continue
         f = file_of(name)
         if f is None:
             continue
@@ -198,6 +205,33 @@ def verdict(matched, minutes):
     if matched is True:
         return None
     return ("older than the code that draws it", minutes) if minutes > 0 else None
+
+
+class StaleInput(RuntimeError):
+    """A saved input (a pose, a cache, a measured file) was made by code that has changed since."""
+
+
+def require_current(stamps, name, fp, strict=True, warn=print):
+    """Use a saved input only if it was made by the code that would make it now.
+
+    A check that reads a saved file instead of building it (a saved pose, a cached part) answers
+    about the figure the file was made from. When the code moved on, that figure is not the one
+    being built, and a check that passes on the wrong figure is worse than one that fails. Stamp the
+    file with `stamps.put(name, fp)` when it is written, and call this before reading it. Raises
+    `StaleInput` when it was made by other code (with `strict`, the default) and warns when it was
+    never stamped. Returns True when the input is current.
+    """
+    m = stamps.matches(name, fp)
+    if m is True:
+        return True
+    if m is False:
+        msg = f"{name} was made by code that has changed since; build it again before reading it"
+        if strict:
+            raise StaleInput(msg)
+    else:
+        msg = f"{name} was never stamped, so it may be older than the code that reads it"
+    warn(msg)
+    return False
 
 
 def _alive(pid):
