@@ -266,6 +266,16 @@ the bench instead.
 
 ## Keeping the pictures current
 
+- `review3d.fresh` does the bookkeeping below. `import_closure(builder, folder, packages)` reads the files a
+  builder reaches by import (a lazy import inside a function included), `fingerprint` hashes them, and
+  `Stamps` records the fingerprint each picture was made from. Take the fingerprint before drawing and
+  stamp it after, so an edit made during a render leaves that picture stale. `verdict` lets the content
+  check outrank the clock in both directions, a missing picture counts as stale, and `lock` keeps one
+  rebuild running at a time.
+- `review3d.bench.watch.Watcher(stale, repair, sources, hold=...)` rebuilds in the background once the
+  code has been quiet for `quiet_s` (5 minutes), and waits while the hold file is under an hour old.
+  Touch the hold file before a run of changes you are testing in your own builds, and delete it after.
+  `run_step` runs each rebuild step in its own process group, and `stop_steps` ends them before a restart.
 - A picture is stale when anything that decides it changed, the model, the renderer, the template or
   the script that builds it. Hash all of them, by content, not modification time. A copied-back file
   keeps its content and changes its time, and the reverse also happens.
