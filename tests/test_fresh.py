@@ -1,5 +1,7 @@
 import os
 import pathlib
+import signal
+import sys
 import time
 
 import pytest
@@ -133,3 +135,80 @@ def test_a_saved_input_from_older_code_is_refused(tmp_path):
     said = []
     assert not fresh.require_current(stamps, "pose", later, strict=False, warn=said.append) and said
     assert not fresh.require_current(fresh.Stamps(tmp_path / "none.json"), "pose", later, warn=said.append)
+
+
+_SERVER = """
+import os, signal, sys, threading, time
+sys.path.insert(0, {src!r})
+from review3d.bench import watch
+{before}
+watch.stop_on_signals()
+def step():
+    try:
+        watch.run_step("import time; time.sleep(60)", "a long step", log=lambda s: None)
+    except RuntimeError:
+        pass  # the step was ended, which is what the test is for
+threading.Thread(target=step, daemon=True).start()
+for _ in range(100):
+    if watch._STEPS:
+        break
+    time.sleep(0.05)
+print(next(iter(watch._STEPS)).pid, flush=True)
+{then}
+time.sleep(30)
+"""
+
+
+def _serve(then, before=""):
+    import pathlib
+    import subprocess
+    src = str(pathlib.Path(watch.__file__).resolve().parents[2])
+    code = _SERVER.format(src=src, then=then, before=before)
+    return subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True)
+
+
+def _gone(pid, wait_s=5.0):
+    import time
+    t0 = time.time()
+    while time.time() - t0 < wait_s:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def test_a_stop_signal_ends_the_server_and_its_steps():
+    p = _serve("")
+    step = int(p.stdout.readline())
+    p.send_signal(signal.SIGTERM)
+    out, err = p.communicate(timeout=10)
+    assert p.returncode == 0, err
+    assert "Traceback" not in err, err
+    assert _gone(step)
+
+
+def test_a_second_signal_while_exiting_prints_no_traceback():
+    # the server is already exiting when the next signal comes, as when a whole session is stopped
+    then = ("import atexit\n"
+            "atexit.register(lambda: (os.kill(os.getpid(), signal.SIGTERM), time.sleep(0.3)))\n"
+            "os.kill(os.getpid(), signal.SIGTERM)")
+    p = _serve(then)
+    step = int(p.stdout.readline())
+    out, err = p.communicate(timeout=10)
+    assert p.returncode == 0, err
+    assert "Traceback" not in err and "SystemExit" not in err, err
+    assert _gone(step)
+
+
+def test_a_signal_while_the_server_exits_by_itself_prints_no_traceback():
+    # registered before stop_on_signals, so it runs late in exit, as logging's own shutdown does
+    before = "import atexit\natexit.register(lambda: (os.kill(os.getpid(), signal.SIGTERM), time.sleep(0.3)))"
+    p = _serve("sys.exit(0)", before=before)
+    step = int(p.stdout.readline())
+    out, err = p.communicate(timeout=10)
+    assert p.returncode == 0, err
+    assert "Traceback" not in err and "SystemExit" not in err, err
+    assert _gone(step)
