@@ -276,6 +276,7 @@ the bench instead.
   code has been quiet for `quiet_s` (5 minutes), and waits while the hold file is under an hour old.
   Touch the hold file before a run of changes you are testing in your own builds, and delete it after.
   `run_step` runs each rebuild step in its own process group, and `stop_steps` ends them before a restart.
+  Call `stop_on_signals()` once at start, so a SIGTERM or SIGINT ends the server and its steps together.
 - A check that reads a saved state (a pose, a cached part, a measured file) in place of the build answers
   about the figure that file was made from. When the code has moved on since, that is not the figure
   being built, and a check that passes on the wrong figure is worse than one that fails. Stamp the file

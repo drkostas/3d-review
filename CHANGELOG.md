@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `review3d.bench.watch.stop_on_signals()` ends a bench server on SIGTERM or SIGINT together with every step `run_step` started. The first signal raises SystemExit(0). A signal that comes after it, or while the server is already exiting, only stops the steps, since SystemExit raised in an exit-time callback is printed as a traceback and does nothing.
+
 ## 0.2.0
 
 - `fresh.require_current(stamps, name, fp)` refuses a saved input (a pose, a cache) made by code that has changed since, raising `StaleInput`, and warns about one that was never stamped.

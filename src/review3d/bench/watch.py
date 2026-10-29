@@ -13,11 +13,13 @@ holding by itself.
 `run_step` runs one rebuild step in a fresh interpreter, in its own process group, so a timeout
 ends everything it started. `stop_steps()` ends any still running, for a clean restart: an
 orphaned rebuild keeps holding the rebuild lock, and every later rebuild is skipped.
+`stop_on_signals()` does that when the server is told to stop (SIGTERM or SIGINT).
 
     w = Watcher(stale=my_stale, repair=my_repair, sources=my_sources, hold="kitview/.hold")
     w.start()
     bench = Bench(..., fresh=w.status, rebuild=lambda: w.pass_once(force=True))
 """
+import atexit
 import datetime as _dt
 import os
 import pathlib
@@ -28,6 +30,7 @@ import threading
 import time
 
 _STEPS = set()
+_STOPPING = [False]
 
 
 class Watcher:
@@ -147,3 +150,31 @@ def stop_steps():
             os.killpg(c.pid, signal.SIGTERM)
         except OSError:
             pass
+
+
+def _exiting():
+    _STOPPING[0] = True
+
+
+def stop_on_signals(signals=(signal.SIGTERM, signal.SIGINT)):
+    """End the program on SIGTERM or SIGINT, and end every step `run_step` started with it.
+
+    The first signal stops the steps and raises SystemExit(0), so the program's own cleanup runs.
+    A signal that comes after that, or while the program is already exiting, only stops the steps.
+    SystemExit raised then lands in an exit-time callback, where Python prints it as a traceback
+    and changes nothing. This happens when whatever stops the server sends its signal twice, or
+    sends it to the whole session as it shuts down. Returns the handler.
+    """
+    import logging  # noqa: F401  its exit-time shutdown must be registered before ours, so ours runs first
+    atexit.register(_exiting)
+
+    def handler(*_a):
+        stop_steps()
+        if _STOPPING[0]:
+            return
+        _STOPPING[0] = True
+        raise SystemExit(0)
+
+    for s_ in signals:
+        signal.signal(s_, handler)
+    return handler
