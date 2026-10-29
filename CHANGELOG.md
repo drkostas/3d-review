@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - `review3d.bench.watch.stop_on_signals()` ends a bench server on SIGTERM or SIGINT together with every step `run_step` started. The first signal raises SystemExit(0). A signal that comes after it, or while the server is already exiting, only stops the steps, since SystemExit raised in an exit-time callback is printed as a traceback and does nothing.
 
