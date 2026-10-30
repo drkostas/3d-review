@@ -6,7 +6,9 @@ the code is still being edited (any file from `sources()` changed in the last `q
 because a rebuild started after the first of a run of edits builds code that is already out of
 date and takes the machine from the next one. It also waits while a hold file exists and is under
 `hold_s` old, so someone testing a run of changes can pause it, and a hold someone forgot stops
-holding by itself.
+holding by itself. A hold file that names its end (an ISO time with its zone) holds until then, for a
+pause longer than `hold_s` such as a redesign, but never more than `HOLD_MAX_S` (a day) after it was
+written.
 
 `status()` is the dict a bench serves at `/api/fresh` (pass it as `Bench(fresh=...)`).
 
@@ -31,6 +33,28 @@ import time
 
 _STEPS = set()
 _STOPPING = [False]
+
+
+#: the longest a hold that names its end may last, from when it was written
+HOLD_MAX_S = 24 * 3600.0
+
+
+def hold_until(text):
+    """The end a hold file names, as a Unix time, or None for a plain hold.
+
+    The file may hold an ISO time with its zone, such as `2026-10-31T09:00:00+02:00`. A time without
+    a zone, a relative time, or anything else (an empty file included) is a plain hold of `hold_s`.
+    """
+    s = (text or "").strip()
+    if not s:
+        return None
+    try:
+        when = _dt.datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        return None
+    return when.timestamp()
 
 
 class Watcher:
@@ -60,13 +84,19 @@ class Watcher:
         return time.time() - newest < self.quiet_s
 
     def held(self):
-        """True while the hold file exists and is under `hold_s` seconds old."""
+        """True while the hold holds: an empty hold file for `hold_s` seconds after it was touched, or
+        one that names its end (`hold_until`) until then, but never more than `HOLD_MAX_S` after it
+        was written, so a hold someone forgot still ends."""
         if self.hold is None:
             return False
         try:
-            return time.time() - self.hold.stat().st_mtime < self.hold_s
+            age = time.time() - self.hold.stat().st_mtime
+            until = hold_until(self.hold.read_text())
         except OSError:
             return False
+        if until is None:
+            return age < self.hold_s
+        return age < HOLD_MAX_S and time.time() < until
 
     def pass_once(self, force=False):
         """One look: rebuild whatever is behind. Returns the names it repaired. Never raises."""

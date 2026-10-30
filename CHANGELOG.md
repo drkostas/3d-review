@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- A watcher's hold file can name its end. When it holds an ISO time with its zone (`2026-10-31T09:00:00+02:00`), `Watcher.held()` holds until then instead of for `hold_s` after the file was touched, for a pause longer than an hour such as a redesign, and never more than `HOLD_MAX_S` (a day) after it was written, so a forgotten hold still ends. An empty file, or anything else, is a plain hold as before. `watch.hold_until(text)` reads the end.
+
 ## 0.3.0
 
 - `review3d.bench.watch.stop_on_signals()` ends a bench server on SIGTERM or SIGINT together with every step `run_step` started. The first signal raises SystemExit(0). A signal that comes after it, or while the server is already exiting, only stops the steps, since SystemExit raised in an exit-time callback is printed as a traceback and does nothing.
