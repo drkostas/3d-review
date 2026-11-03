@@ -291,6 +291,8 @@ the bench instead.
 - Rebuild the geometry before the pictures of it. Re-rendering a picture from a stale stage gives a
   new picture of the old model.
 - A full refresh can take minutes. Rebuild in the background and let `fresh` report what is behind.
+- A sheet still behind after its rebuild is listed under `failing` in `/api/fresh` and is not tried
+  again until a source changes. Read `failing` and `error` before trusting "up to date".
 - Before restarting a bench that spawns rebuilds, stop its child processes too. An orphaned child
   keeps holding the rebuild lock and every later rebuild is skipped.
 
