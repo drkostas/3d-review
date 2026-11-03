@@ -70,8 +70,19 @@ class Watcher:
         self.stale, self.repair, self.sources = stale, repair, sources
         self.quiet_s, self.every, self.hold_s = float(quiet_s), float(every), float(hold_s)
         self.hold = pathlib.Path(hold) if hold else None
-        self.state = {"checked": None, "rebuilding": False, "last": [], "error": None}
+        self.state = {"checked": None, "rebuilding": False, "last": [], "error": None, "failing": []}
         self._busy = threading.Lock()
+        # names a repair left behind, and the newest source time when it did: they are not tried
+        # again until a source changes, so a sheet that always fails is not rebuilt every pass
+        self._failed = {}
+
+    def _newest(self):
+        if not self.sources:
+            return None
+        try:
+            return max(pathlib.Path(p).stat().st_mtime for p in self.sources())
+        except (OSError, ValueError):
+            return None
 
     def editing(self):
         """True while a source file changed in the last `quiet_s` seconds."""
@@ -99,7 +110,9 @@ class Watcher:
         return age < HOLD_MAX_S and time.time() < until
 
     def pass_once(self, force=False):
-        """One look: rebuild whatever is behind. Returns the names it repaired. Never raises."""
+        """One look: rebuild whatever is behind. Returns the names it tried; `status()` says which came
+        fresh (`last_rebuilt`) and which are still behind and left alone until a source changes
+        (`failing`). Never raises."""
         if not force and (self.editing() or self.held()):
             return []
         if not self._busy.acquire(blocking=False):
@@ -108,12 +121,29 @@ class Watcher:
         try:
             late = [n if isinstance(n, str) else n[0] for n in self.stale()]
             self.state["checked"] = _dt.datetime.now().astimezone().isoformat()
+            newest = self._newest()
+            if not force:
+                # a name that failed is skipped until a source changes after the failure
+                late = [n for n in late if n not in self._failed or (newest is not None
+                                                                     and newest > self._failed[n])]
             if not late and not force:
                 self.state["last"], self.state["error"] = [], None
+                self.state["failing"] = sorted(self._failed)
                 return []
             self.repair(sorted(set(late)))
-            self.state["last"], self.state["error"] = sorted(set(late)), None
-            return self.state["last"]
+            # ⛔ A REPAIR IS NOT A SUCCESS UNTIL THE NAMES ARE FRESH. Names still behind straight after
+            # their repair failed, and are left alone until a source changes, instead of being
+            # rebuilt on every pass for as long as the server runs.
+            still = {n if isinstance(n, str) else n[0] for n in self.stale()} & set(late)
+            for n in set(late) - still:
+                self._failed.pop(n, None)
+            for n in still:
+                self._failed[n] = newest if newest is not None else time.time()
+            self.state["last"] = sorted(set(late) - still)
+            self.state["failing"] = sorted(self._failed)
+            self.state["error"] = (f"still behind after their rebuild: {', '.join(sorted(still))}"
+                                   if still else None)
+            return sorted(set(late))
         except Exception as e:                    # a watcher must never take the server down
             self.state["error"] = f"{type(e).__name__}: {e}"
             return []
@@ -141,7 +171,8 @@ class Watcher:
                 for n in late]
         return {"stale": rows, "up_to_date": not late, "rebuilding": self.state["rebuilding"],
                 "checked": self.state["checked"], "last_rebuilt": self.state["last"],
-                "error": self.state["error"], "held": self.held(), "editing": self.editing()}
+                "error": self.state["error"], "failing": list(self.state.get("failing", [])),
+                "held": self.held(), "editing": self.editing()}
 
 
 def run_step(code, what, cwd=None, timeout=2400, prefix=None, env=None, log=print):
