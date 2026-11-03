@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2
+
+- **`review3d.__version__` can no longer fall behind the release.** It was written by hand beside the version in pyproject.toml, so the two could drift apart. `__version__` now reads the version from the installed package's metadata with `importlib.metadata`, so pyproject.toml is the only place the version is written. A source tree that was never installed reads `0+unknown`. An editable install keeps the version it had when it was installed, so run `pip install -e .` again after changing the version. A new test checks that `__version__` matches pyproject.toml.
+
 ## 0.4.1
 
 - **Fix: a sheet that fails is not rebuilt on every pass.** After a repair the watcher reads `stale()` again. Names still behind are recorded as failing and left alone until a source file changes after the failure, and `status()` reports them under `failing` with an `error`. Before, a sheet whose rebuild always failed was rebuilt every `every` seconds for as long as the server ran, holding any job queue it went through. `pass_once` still returns the names it tried, and `last_rebuilt` now lists only those that came fresh.
